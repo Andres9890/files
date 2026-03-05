@@ -83,6 +83,8 @@ jobs:
           
           IMG_DIR="images"
           VID_DIR="videos"
+          AUDIO_DIR="audio"
+          DOC_DIR="documents"
           EXE_DIR="executables"
           TXT_DIR="texts"
           MISC_DIR="miscellaneous"
@@ -94,10 +96,14 @@ jobs:
             jpg|jpeg|png|gif|webp|svg|bmp|tiff|ico|heic) TARGET_DIR="$IMG_DIR" ;;
             # Videos
             mp4|mkv|webm|avi|mov|wmv|flv|m4v|mpg|mpeg|3gp|m4v) TARGET_DIR="$VID_DIR" ;;
+            # Audio
+            mp3|wav|ogg|flac|aac|m4a|wma) TARGET_DIR="$AUDIO_DIR" ;;
+            # Documents
+            pdf|doc|docx|xls|xlsx|ppt|pptx|odt|ods|odp|rtf) TARGET_DIR="$DOC_DIR" ;;
             # Executables
             exe|msi|apk|app|dmg|bin|sh|bat|cmd|ps1|deb|rpm|run|ipa) TARGET_DIR="$EXE_DIR" ;;
             # Texts and Objects
-            txt|json|md|csv|xml|yaml|yml|log|ini|conf|rtf|pdf|html|htm|css|js|ts|py|c|cpp|h|hpp|java|go|rs|rb) TARGET_DIR="$TXT_DIR" ;;
+            txt|json|md|csv|xml|yaml|yml|log|ini|conf|html|htm|css|js|ts|py|c|cpp|h|hpp|java|go|rs|rb) TARGET_DIR="$TXT_DIR" ;;
             # Anything else (or no extension)
             *) TARGET_DIR="$MISC_DIR" ;;
           esac
