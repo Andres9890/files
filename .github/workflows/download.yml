@@ -104,14 +104,39 @@ jobs:
           
           mkdir -p "$TARGET_DIR"
           
-          echo "Moving '$FILE' to '$TARGET_DIR/'"
-          mv "$FILE" "$TARGET_DIR/"
+          ORIG_FILE="$FILE"
+          if [ -f "$TARGET_DIR/$FILE" ]; then
+            EXISTING_MD5=$(md5sum "$TARGET_DIR/$FILE" | awk '{print $1}')
+            if [ "$FILE_MD5" = "$EXISTING_MD5" ]; then
+              echo "No changes to commit"
+              rm "$ORIG_FILE"
+              exit 0
+            else
+              NUM=1
+              FILENAME="${ORIG_FILE%.*}"
+              ORIG_EXT="${ORIG_FILE##*.}"
+              if [ "$ORIG_EXT" = "$ORIG_FILE" ]; then
+                while [ -f "$TARGET_DIR/${FILENAME}(${NUM})" ]; do
+                  NUM=$((NUM+1))
+                done
+                FILE="${FILENAME}(${NUM})"
+              else
+                while [ -f "$TARGET_DIR/${FILENAME}(${NUM}).${ORIG_EXT}" ]; do
+                  NUM=$((NUM+1))
+                done
+                FILE="${FILENAME}(${NUM}).${ORIG_EXT}"
+              fi
+            fi
+          fi
+          
+          echo "Moving '$ORIG_FILE' to '$TARGET_DIR/$FILE'"
+          mv "$ORIG_FILE" "$TARGET_DIR/$FILE"
           
           TARGET_PATH="$TARGET_DIR/$FILE"
           
           # Create commit message
           {
-            echo "Add downloaded file "$FILE""
+            echo "Add downloaded file \"$FILE\""
             echo ""
             echo "Metadata:"
             echo "- Size: $FILE_SIZE_HR"
