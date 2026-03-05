@@ -1,0 +1,11 @@
+Add downloaded file "hearts-of-iron-iv-free-download-preinstalled-steamrip.jpg"
+
+Metadata:
+- Size: 48KB
+- Type: JPEG image data, progressive, precision 8, 1280x720, components 3
+- Modified Time: 2026-03-05 19:44:41.639258000 +0000
+- CRC32: de7f029d
+- MD5: 60562b963af560270cc08f81ea2202a6
+- SHA1: 70200f7d8a6dfc5b9adfc311cb218cd32d683bf8
+- SHA256: d7c1c7a87acdf4c09a2cd2336f52b8a7b6d3ef801e03b9de4775ce4ca626aa5e
+- Source URL: https://steamrip.com/wp-content/uploads/2021/08/hearts-of-iron-iv-free-download-preinstalled-steamrip.jpg
