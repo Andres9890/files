@@ -1,0 +1,14 @@
+Add downloaded file "fusionApp-release.apk"
+
+Move existing files to root: false
+
+Metadata:
+- File: fusionApp-release.apk
+- Size: 55MB
+- Type: Android package (APK), with gradle app-metadata.properties
+- Modified Time: 2026-10-15 20:28:36.428962163 +0000
+- CRC32: 7756fe39
+- MD5: 1494108ed61f956c35573b8cb2ab352c
+- SHA1: bb63d65145d33355eb110bfd99090cce0d67c3b6
+- SHA256: 90bcbf4e8ca0bba1ceefc6c08a072e12525d76dd696040b61db531018290e3a3
+- Source URL: https://github.com/All-Of-Us-Mods/FusionCore/releases/download/0.0.4/fusionApp-release.apk
