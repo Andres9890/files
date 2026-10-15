@@ -9,7 +9,7 @@ on:
         default: ''
         type: string
       move_existing_files:
-        description: 'Move existing files to root and update previous commit messages'
+        description: 'Move existing files to root, update logs, and rebuild list.txt'
         required: false
         default: false
         type: boolean
@@ -28,7 +28,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@main
 
-      - name: Download, reorganize, update logs, and commit
+      - name: Download, reorganize, update logs and list, and commit
         shell: bash
         env:
           DOWNLOAD_URL: ${{ inputs.url }}
@@ -38,7 +38,6 @@ jobs:
 
           DOWNLOAD_URL="${DOWNLOAD_URL:-}"
           MOVE_EXISTING_FILES="${MOVE_EXISTING_FILES:-false}"
-
           if [[ -z "$DOWNLOAD_URL" && "$MOVE_EXISTING_FILES" != true ]]; then
             echo "No URL provided and moving existing files is disabled. Nothing to do."
             exit 0
@@ -47,7 +46,6 @@ jobs:
           TIMESTAMP=$(TZ=UTC date +"%Y-%m-%d_%H-%M-%S")
           TEMP_DIR=$(mktemp -d "${RUNNER_TEMP:-/tmp}/repo-download.XXXXXX")
           trap 'rm -rf -- "$TEMP_DIR"' EXIT
-
           DOWNLOADED_PATH=""
           DOWNLOAD_ADDED=false
           FILE=""
@@ -55,35 +53,33 @@ jobs:
 
           mkdir -p "$TEMP_DIR/download"
 
-          # Shared formatter and updater, kept outside the repository.
+          # Shared metadata and listing helpers stay outside the repository.
           cat > "$TEMP_DIR/metadata.py" <<'PY'
           import hashlib
           import re
+          import subprocess
           import sys
           from decimal import Decimal, localcontext
           from pathlib import Path
-          from urllib.parse import quote
+          from urllib.parse import quote, quote_from_bytes
 
           BASE_URL = "https://andres9890.github.io/files/"
           UNITS = ("B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB")
+          NO_DOWNLOAD = "N/A (no download requested)"
 
 
           def format_size(byte_count):
               byte_count = int(byte_count)
-
               with localcontext() as context:
                   context.prec = 100
                   value = Decimal(byte_count)
                   unit = 0
-
                   while value >= 1024 and unit < len(UNITS) - 1:
                       value /= 1024
                       unit += 1
-
                   number = format(value, "f")
                   if "." in number:
                       number = number.rstrip("0").rstrip(".")
-
               return f"{number} {UNITS[unit]} ({byte_count} bytes)"
 
 
@@ -93,8 +89,7 @@ jobs:
 
           def field(text, name):
               match = re.search(
-                  rf"(?m)^-[ \t]*{re.escape(name)}:[ \t]*(.*)$",
-                  text,
+                  rf"(?m)^-[ \t]*{re.escape(name)}:[ \t]*(.*)$", text
               )
               return match.group(1).strip() if match else ""
 
@@ -126,25 +121,18 @@ jobs:
               def find_current_file(filename, text):
                   expected = field(text, "SHA256").lower()
                   algorithm = "sha256"
-
                   if not expected:
                       expected = field(text, "MD5").lower()
                       algorithm = "md5"
-
                   named_file = by_name.get(filename)
-
                   if not expected:
                       return named_file
-
-                  # Prefer the recorded name, then look for renamed files.
                   candidates = []
                   if named_file is not None:
                       candidates.append(named_file)
                   candidates.extend(
-                      path for path in root_files
-                      if path != named_file
+                      path for path in root_files if path != named_file
                   )
-
                   for candidate in candidates:
                       if digest(candidate, algorithm) == expected:
                           return candidate
@@ -153,62 +141,45 @@ jobs:
               for log in sorted(Path("workflow").rglob("commit_msg_*.txt")):
                   if not log.is_file() or log.is_symlink():
                       continue
-
                   try:
                       original = log.read_text(encoding="utf-8")
                   except UnicodeError:
                       print(f"Skipping non-UTF-8 log: {log}")
                       continue
-
                   text = original
                   filename = field(text, "File")
-
-                  # The original workflow recorded the filename in the title.
                   if not filename:
                       first_line = text.splitlines()[0] if text else ""
                       match = re.fullmatch(
                           r'Add downloaded file "(.*)"'
-                          r'(?: and flatten existing folders)?',
-                          first_line,
+                          r'(?: and flatten existing folders)?', first_line
                       )
                       if match:
                           filename = match.group(1)
 
-                  url = "N/A (no downloaded file)"
-
+                  url = NO_DOWNLOAD
                   if filename:
                       actual = find_current_file(filename, text)
                       byte_count = None
-
                       if actual is not None:
                           filename = actual.name
                           byte_count = actual.stat().st_size
-
                           text = re.sub(
                               r"(?m)^- File:.*$",
-                              lambda _: f"- File: {filename}",
-                              text,
-                              count=1,
+                              lambda _: f"- File: {filename}", text, count=1
                           )
                       else:
-                          # A previously stored exact count can still be reused.
                           match = re.search(
-                              r"\(([\d,]+) bytes\)",
-                              field(text, "Size"),
+                              r"\(([\d,]+) bytes\)", field(text, "Size")
                           )
                           if match:
-                              byte_count = int(
-                                  match.group(1).replace(",", "")
-                              )
-
+                              byte_count = int(match.group(1).replace(",", ""))
                       if byte_count is not None:
                           size_line = f"- Size: {format_size(byte_count)}"
                           if re.search(r"(?m)^- Size:", text):
                               text = re.sub(
-                                  r"(?m)^- Size:.*$",
-                                  lambda _: size_line,
-                                  text,
-                                  count=1,
+                                  r"(?m)^- Size:.*$", lambda _: size_line,
+                                  text, count=1
                               )
                           else:
                               text = text.rstrip("\n") + "\n" + size_line + "\n"
@@ -217,10 +188,8 @@ jobs:
                               f"Could not recover exact size for {log}; "
                               "keeping its existing size."
                           )
-
                       url = current_url(filename)
 
-                  # Replace any previous Current URL and keep it at the end.
                   lines = [
                       line for line in text.splitlines()
                       if not re.match(
@@ -229,15 +198,30 @@ jobs:
                   ]
                   while lines and not lines[-1].strip():
                       lines.pop()
-
                   lines.append(f"- Current URL: {url}")
                   updated = "\n".join(lines) + "\n"
-
                   if updated != original:
                       log.write_text(updated, encoding="utf-8")
                       updated_count += 1
-
               print(f"Updated {updated_count} previous commit-message files.")
+
+
+          def build_file_list():
+              # The staged Git index contains all files that will be committed,
+              # including nested files, and excludes internal .git metadata.
+              paths = set(subprocess.check_output(
+                  ["git", "ls-files", "--cached", "-z"]
+              ).split(b"\0"))
+              paths.discard(b"")
+              paths.add(b"list.txt")
+              links = [
+                  BASE_URL + quote_from_bytes(path, safe="/")
+                  for path in sorted(paths)
+              ]
+              Path("list.txt").write_text(
+                  "\n".join(links) + "\n", encoding="utf-8"
+              )
+              print(f"Updated list.txt with {len(links)} site links.")
 
 
           if sys.argv[1] == "size":
@@ -246,34 +230,32 @@ jobs:
               print(current_url(sys.argv[2]))
           elif sys.argv[1] == "update":
               update_old_logs()
+          elif sys.argv[1] == "index":
+              build_file_list()
           else:
               raise SystemExit("Unknown metadata command")
           PY
 
           if [[ -n "$DOWNLOAD_URL" ]]; then
+            # Download outside the repository so temporary files are never committed.
             (
               cd "$TEMP_DIR/download"
               curl --fail --silent --show-error --location --globoff \
                 --remote-name --remote-header-name -- "$DOWNLOAD_URL"
             )
 
-            mapfile -d '' -t DOWNLOADS < <(
-              find "$TEMP_DIR/download" -maxdepth 1 -type f -print0
-            )
-
+            mapfile -d '' -t DOWNLOADS < <(find "$TEMP_DIR/download" -maxdepth 1 -type f -print0)
             if [ "${#DOWNLOADS[@]}" -ne 1 ]; then
               echo "Error: Download failed or did not save exactly one file."
               exit 1
             fi
-
             DOWNLOADED_PATH="${DOWNLOADS[0]}"
             echo "Downloaded file: ${DOWNLOADED_PATH##*/}"
 
             FILE_SIZE=$(wc -c < "$DOWNLOADED_PATH")
             MAX_SIZE=$((100 * 1024 * 1024))
-
             if [ "$FILE_SIZE" -gt "$MAX_SIZE" ]; then
-              echo "Error: File exceeds the 100MB limit."
+              echo "Error: File size ($((FILE_SIZE / 1024 / 1024)) MB) exceeds the 100MB limit."
               exit 1
             fi
 
@@ -288,18 +270,24 @@ jobs:
             echo "No URL provided; skipping download."
           fi
 
-          # Reuse identical files and number conflicting filenames.
+          # Move without overwriting existing files. Identical files are reused;
+          # different files with the same name become name(1).ext, name(2).ext, etc.
+          # PLACED_PATH and PLACED_NEW describe the result for the caller.
           place_file() {
             local source="$1" destination_dir="$2"
             local filename="${source##*/}" stem suffix="" candidate number=0
             stem="$filename"
-
             if [[ "$filename" == ?*.* ]]; then
               stem="${filename%.*}"
               suffix=".${filename##*.}"
             fi
-
             candidate="$destination_dir/$filename"
+
+            # Reserve list.txt for the generated index when rebuilding it.
+            if [[ "$MOVE_EXISTING_FILES" == true && "$candidate" == ./list.txt ]]; then
+              number=1
+              candidate="$destination_dir/${stem}(${number})${suffix}"
+            fi
 
             while [[ -e "$candidate" || -L "$candidate" ]]; do
               if [[ -f "$candidate" && ! -L "$candidate" && ! -L "$source" ]] \
@@ -311,7 +299,6 @@ jobs:
                 git add -f -- "$candidate"
                 return
               fi
-
               number=$((number + 1))
               candidate="$destination_dir/${stem}(${number})${suffix}"
             done
@@ -323,20 +310,19 @@ jobs:
             git add -f -- "$candidate"
           }
 
+          # This folder stores commit-message text files, not GitHub Actions YAML.
           mkdir -p workflow
 
           if [[ "$MOVE_EXISTING_FILES" == true ]]; then
-            # Move old commit-message files into the root workflow folder.
+            # Migrate commit messages from the old location first.
             if [ -d texts/workflow ]; then
               while IFS= read -r -d '' OLD_FILE; do
                 place_file "$OLD_FILE" workflow
-              done < <(
-                find texts/workflow \( -type f -o -type l \) -print0
-              )
+              done < <(find texts/workflow \( -type f -o -type l \) -print0)
             fi
 
-            # Flatten ordinary folders while preserving repository internals,
-            # GitHub configuration, and commit-message files.
+            # Flatten existing subfolders. Keep Git internals, GitHub configuration,
+            # and the commit-message folder in their proper locations.
             while IFS= read -r -d '' OLD_FILE; do
               place_file "$OLD_FILE" .
             done < <(
@@ -344,6 +330,7 @@ jobs:
                 -o \( -type f -o -type l \) -path './*/*' -print0
             )
 
+            # Remove the emptied folders, working from children to parents.
             while IFS= read -r -d '' OLD_DIR; do
               rmdir -- "$OLD_DIR" 2>/dev/null || true
             done < <(
@@ -354,6 +341,7 @@ jobs:
             echo "Moving existing files is disabled; keeping existing folders."
           fi
 
+          # Every download goes directly into the repository root.
           if [[ -n "$DOWNLOADED_PATH" ]]; then
             place_file "$DOWNLOADED_PATH" .
             FILE="${PLACED_PATH##*/}"
@@ -361,35 +349,35 @@ jobs:
             CURRENT_URL=$(python3 "$TEMP_DIR/metadata.py" url "$FILE")
           fi
 
-          # Run even when the files were already moved on an earlier run.
           if [[ "$MOVE_EXISTING_FILES" == true ]]; then
             python3 "$TEMP_DIR/metadata.py" update
           fi
 
+          # Include file moves and deletions, even if the download was a duplicate.
           git add -A
-
+          if [[ "$MOVE_EXISTING_FILES" == true ]]; then
+            python3 "$TEMP_DIR/metadata.py" index
+            git add -f -- list.txt
+          fi
           if git diff --staged --quiet; then
             echo "No changes to commit"
             exit 0
           fi
 
-          # Timestamp-only names; number only an actual filename collision.
+          # Use timestamp-only log names, adding a number only if the name is taken.
           MSG_FILE="workflow/commit_msg_${TIMESTAMP}.txt"
           MSG_NUMBER=1
           while [[ -e "$MSG_FILE" || -L "$MSG_FILE" ]]; do
             MSG_FILE="workflow/commit_msg_${TIMESTAMP}(${MSG_NUMBER}).txt"
             MSG_NUMBER=$((MSG_NUMBER + 1))
           done
-
           {
             if [ "$DOWNLOAD_ADDED" = true ]; then
               printf 'Add downloaded file "%s"\n' "$FILE"
             else
-              printf 'Reorganize repository files and update commit messages\n'
+              printf 'Reorganize repository files, update logs and file list\n'
             fi
-
             printf '\nMove existing files to root: %s\n' "$MOVE_EXISTING_FILES"
-
             if [[ -n "$DOWNLOAD_URL" ]]; then
               printf '\nMetadata:\n'
               printf -- '- File: %s\n' "$FILE"
@@ -404,12 +392,16 @@ jobs:
             else
               printf '\nNo download requested.\n'
             fi
-
             printf -- '- Current URL: %s\n' "$CURRENT_URL"
           } > "$MSG_FILE"
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -f -- "$MSG_FILE"
+          if [[ "$MOVE_EXISTING_FILES" == true ]]; then
+            # Include this run's new commit-message file in the final listing.
+            python3 "$TEMP_DIR/metadata.py" index
+            git add -f -- list.txt
+          fi
           git commit -F "$MSG_FILE"
           git push
