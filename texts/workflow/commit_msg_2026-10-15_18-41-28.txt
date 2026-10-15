@@ -1,0 +1,11 @@
+Add downloaded file "staffguide.pdf"
+
+Metadata:
+- Size: 4.3MB
+- Type: PDF document, version 1.4, 8 page(s)
+- Modified Time: 2026-10-15 18:41:29.328245429 +0000
+- CRC32: cb550be9
+- MD5: 9b574f8f52006e50d5c69d91db6ab435
+- SHA1: 28b44c38cb8c1fa4f9d73610c133123cebb1cbb2
+- SHA256: 4950ccc883823c4cb7adf7a92221f5475c1cc37b34f844184790fa0302a93feb
+- Source URL: https://tuxxego.com/staffguide.pdf
