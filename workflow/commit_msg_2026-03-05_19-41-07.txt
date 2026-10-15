@@ -1,7 +1,7 @@
 Add downloaded file "IMG_9093.png"
 
 Metadata:
-- Size: 429.3779296875 KiB (439683 bytes)
+- Size: 429.38 KB (439683 bytes)
 - Type: PNG image data, 1004 x 887, 8-bit/color RGB, non-interlaced
 - Modified Time: 2026-03-05 19:41:08.242917889 +0000
 - CRC32: ee707753

@@ -1,7 +1,7 @@
 Add downloaded file "FxU3MySyj28.info.json"
 
 Metadata:
-- Size: 549.787109375 KiB (562982 bytes)
+- Size: 549.79 KB (562982 bytes)
 - Type: JSON text data
 - Modified Time: 2026-03-06 10:19:01.950396489 +0000
 - CRC32: 8c7b46ba

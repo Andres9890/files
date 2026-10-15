@@ -1,7 +1,7 @@
 Add downloaded file "hearts-of-iron-iv-free-download-preinstalled-steamrip.jpg"
 
 Metadata:
-- Size: 47.2353515625 KiB (48369 bytes)
+- Size: 47.24 KB (48369 bytes)
 - Type: JPEG image data, progressive, precision 8, 1280x720, components 3
 - Modified Time: 2026-03-05 19:44:41.639258000 +0000
 - CRC32: de7f029d
