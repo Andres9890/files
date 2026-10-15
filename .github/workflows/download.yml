@@ -163,8 +163,13 @@ jobs:
             exit 0
           fi
 
-          # mktemp prevents a new log from overwriting an existing commit message.
-          MSG_FILE=$(mktemp "workflow/commit_msg_${TIMESTAMP}_XXXXXX.txt")
+          # Use timestamp-only log names, adding a number only if the name is taken.
+          MSG_FILE="workflow/commit_msg_${TIMESTAMP}.txt"
+          MSG_NUMBER=1
+          while [[ -e "$MSG_FILE" || -L "$MSG_FILE" ]]; do
+            MSG_FILE="workflow/commit_msg_${TIMESTAMP}(${MSG_NUMBER}).txt"
+            MSG_NUMBER=$((MSG_NUMBER + 1))
+          done
           {
             if [ "$DOWNLOAD_ADDED" = true ]; then
               printf 'Add downloaded file "%s"\n' "$FILE"
