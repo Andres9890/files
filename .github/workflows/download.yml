@@ -64,12 +64,14 @@ jobs:
           from urllib.parse import quote, quote_from_bytes
 
           BASE_URL = "https://andres9890.github.io/files/"
-          UNITS = ("B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB")
+          UNITS = ("B", "KB", "MB", "GB", "TB", "PB", "EB")
           NO_DOWNLOAD = "N/A (no download requested)"
 
 
           def format_size(byte_count):
               byte_count = int(byte_count)
+              if byte_count < 1024:
+                  return f"{byte_count} bytes"
               with localcontext() as context:
                   context.prec = 100
                   value = Decimal(byte_count)
@@ -77,7 +79,7 @@ jobs:
                   while value >= 1024 and unit < len(UNITS) - 1:
                       value /= 1024
                       unit += 1
-                  number = format(value, "f")
+                  number = format(value, ".2f")
                   if "." in number:
                       number = number.rstrip("0").rstrip(".")
               return f"{number} {UNITS[unit]} ({byte_count} bytes)"
@@ -172,6 +174,11 @@ jobs:
                           match = re.search(
                               r"\(([\d,]+) bytes\)", field(text, "Size")
                           )
+                          if not match:
+                              match = re.fullmatch(
+                                  r"([\d,]+)[ \t]*(?:bytes|B)",
+                                  field(text, "Size"),
+                              )
                           if match:
                               byte_count = int(match.group(1).replace(",", ""))
                       if byte_count is not None:
@@ -216,7 +223,13 @@ jobs:
               paths.add(b"list.txt")
               links = [
                   BASE_URL + quote_from_bytes(path, safe="/")
-                  for path in sorted(paths)
+                  for path in sorted(
+                      paths,
+                      key=lambda path: (
+                          path.decode("utf-8", "surrogateescape").casefold(),
+                          path,
+                      ),
+                  )
               ]
               Path("list.txt").write_text(
                   "\n".join(links) + "\n", encoding="utf-8"
