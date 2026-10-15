@@ -11,6 +11,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: download-and-commit-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   download-and-commit:
     runs-on: ubuntu-latest
@@ -18,154 +22,142 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Process, Log, and Commit
+      - name: Download, flatten folders, log, and commit
+        shell: bash
+        env:
+          DOWNLOAD_URL: ${{ inputs.url }}
         run: |
-          # Set up timestamp in UTC
+          set -euo pipefail
+
           TIMESTAMP=$(TZ=UTC date +"%Y-%m-%d_%H-%M-%S")
-          
-          # Create texts/workflow directory
-          mkdir -p texts/workflow
-          
-          # Define commit msg filename
-          MSG_FILE="texts/workflow/commit_msg_${TIMESTAMP}.txt"
-          
-          echo "Starting file download and categorization..."
-          
-          # Create temp directory
-          mkdir temp_download_dir
-          cd temp_download_dir
-          
-          # Download file
-          curl -sS -L -O -J "${{ github.event.inputs.url }}"
-          
-          DOWNLOADED_FILE=$(ls -1 | head -1)
-          
-          if [ -z "$DOWNLOADED_FILE" ]; then
-            echo "Error: Download failed or no file saved."
+          TEMP_DIR=$(mktemp -d "${RUNNER_TEMP:-/tmp}/repo-download.XXXXXX")
+          trap 'rm -rf -- "$TEMP_DIR"' EXIT
+
+          # Download outside the repository so temporary files are never committed.
+          (
+            cd "$TEMP_DIR"
+            curl --fail --silent --show-error --location --globoff \
+              --remote-name --remote-header-name -- "$DOWNLOAD_URL"
+          )
+
+          mapfile -d '' -t DOWNLOADS < <(find "$TEMP_DIR" -maxdepth 1 -type f -print0)
+          if [ "${#DOWNLOADS[@]}" -ne 1 ]; then
+            echo "Error: Download failed or did not save exactly one file."
             exit 1
           fi
-          
-          echo "Downloaded file: $DOWNLOADED_FILE"
-          
-          # Check size
-          FILE_SIZE=$(wc -c < "$DOWNLOADED_FILE")
+          DOWNLOADED_PATH="${DOWNLOADS[0]}"
+          echo "Downloaded file: ${DOWNLOADED_PATH##*/}"
+
+          FILE_SIZE=$(wc -c < "$DOWNLOADED_PATH")
           MAX_SIZE=$((100 * 1024 * 1024))
-          
           if [ "$FILE_SIZE" -gt "$MAX_SIZE" ]; then
-            echo "Error: File size ($((FILE_SIZE / 1024 / 1024)) MB) exceeds the 100MB limit. Skipping the job."
+            echo "Error: File size ($((FILE_SIZE / 1024 / 1024)) MB) exceeds the 100MB limit."
             exit 1
           fi
-          
-          # Extract metadata
-          FILE_TYPE=$(file -b "$DOWNLOADED_FILE")
-          # --to=iec without the 'i' suffix outputs KB, MB, GB (base 1024)
+
+          FILE_TYPE=$(file -b -- "$DOWNLOADED_PATH")
           FILE_SIZE_HR=$(numfmt --to=iec --suffix=B "$FILE_SIZE")
-          FILE_MD5=$(md5sum "$DOWNLOADED_FILE" | awk '{print $1}')
-          FILE_SHA1=$(sha1sum "$DOWNLOADED_FILE" | awk '{print $1}')
-          FILE_SHA256=$(sha256sum "$DOWNLOADED_FILE" | awk '{print $1}')
-          FILE_CRC32=$(python3 -c "import sys, binascii; print(format(binascii.crc32(open(sys.argv[1],'rb').read()) & 0xFFFFFFFF, '08x'))" "$DOWNLOADED_FILE")
-          FILE_MOD_TIME=$(stat -c "%y" "$DOWNLOADED_FILE")
-          
-          # Move file out of temp_download_dir
-          mv "$DOWNLOADED_FILE" ..
-          cd ..
-          rm -rf temp_download_dir
-          
-          # Process file
-          FILE="$DOWNLOADED_FILE"
-          EXT="${FILE##*.}"
-          
-          if [ "$EXT" = "$FILE" ]; then
-            EXT=""
-          else
-            EXT=$(echo "$EXT" | tr '[:upper:]' '[:lower:]')
-          fi
-          
-          IMG_DIR="images"
-          VID_DIR="videos"
-          AUDIO_DIR="audio"
-          DOC_DIR="documents"
-          EXE_DIR="executables"
-          TXT_DIR="texts"
-          MISC_DIR="miscellaneous"
-          
-          TARGET_DIR="$MISC_DIR"
-          
-          case "$EXT" in
-            # Images
-            jpg|jpeg|png|gif|webp|svg|bmp|tiff|ico|heic) TARGET_DIR="$IMG_DIR" ;;
-            # Videos
-            mp4|mkv|webm|avi|mov|wmv|flv|m4v|mpg|mpeg|3gp|m4v) TARGET_DIR="$VID_DIR" ;;
-            # Audio
-            mp3|wav|ogg|flac|aac|m4a|wma) TARGET_DIR="$AUDIO_DIR" ;;
-            # Documents
-            pdf|doc|docx|xls|xlsx|ppt|pptx|odt|ods|odp|rtf) TARGET_DIR="$DOC_DIR" ;;
-            # Executables
-            exe|msi|apk|app|dmg|bin|sh|bat|cmd|ps1|deb|rpm|run|ipa) TARGET_DIR="$EXE_DIR" ;;
-            # Texts and Objects
-            txt|json|md|csv|xml|yaml|yml|log|ini|conf|html|htm|css|js|ts|py|c|cpp|h|hpp|java|go|rs|rb) TARGET_DIR="$TXT_DIR" ;;
-            # Anything else (or no extension)
-            *) TARGET_DIR="$MISC_DIR" ;;
-          esac
-          
-          mkdir -p "$TARGET_DIR"
-          
-          ORIG_FILE="$FILE"
-          if [ -f "$TARGET_DIR/$FILE" ]; then
-            EXISTING_MD5=$(md5sum "$TARGET_DIR/$FILE" | awk '{print $1}')
-            if [ "$FILE_MD5" = "$EXISTING_MD5" ]; then
-              echo "No changes to commit"
-              rm "$ORIG_FILE"
-              exit 0
-            else
-              NUM=1
-              FILENAME="${ORIG_FILE%.*}"
-              ORIG_EXT="${ORIG_FILE##*.}"
-              if [ "$ORIG_EXT" = "$ORIG_FILE" ]; then
-                while [ -f "$TARGET_DIR/${FILENAME}(${NUM})" ]; do
-                  NUM=$((NUM+1))
-                done
-                FILE="${FILENAME}(${NUM})"
-              else
-                while [ -f "$TARGET_DIR/${FILENAME}(${NUM}).${ORIG_EXT}" ]; do
-                  NUM=$((NUM+1))
-                done
-                FILE="${FILENAME}(${NUM}).${ORIG_EXT}"
-              fi
+          FILE_MD5=$(md5sum -- "$DOWNLOADED_PATH" | awk '{print $1}')
+          FILE_SHA1=$(sha1sum -- "$DOWNLOADED_PATH" | awk '{print $1}')
+          FILE_SHA256=$(sha256sum -- "$DOWNLOADED_PATH" | awk '{print $1}')
+          FILE_CRC32=$(python3 -c "import sys, binascii; print(format(binascii.crc32(open(sys.argv[1], 'rb').read()) & 0xFFFFFFFF, '08x'))" "$DOWNLOADED_PATH")
+          FILE_MOD_TIME=$(stat -c "%y" -- "$DOWNLOADED_PATH")
+
+          # Move without overwriting existing files. Identical files are reused;
+          # different files with the same name become name(1).ext, name(2).ext, etc.
+          # PLACED_PATH and PLACED_NEW describe the result for the caller.
+          place_file() {
+            local source="$1" destination_dir="$2"
+            local filename="${source##*/}" stem suffix="" candidate number=0
+            stem="$filename"
+            if [[ "$filename" == ?*.* ]]; then
+              stem="${filename%.*}"
+              suffix=".${filename##*.}"
             fi
+            candidate="$destination_dir/$filename"
+
+            while [[ -e "$candidate" || -L "$candidate" ]]; do
+              if [[ -f "$candidate" && ! -L "$candidate" && ! -L "$source" ]] \
+                && cmp -s -- "$source" "$candidate"; then
+                echo "Reusing identical file: $candidate"
+                rm -- "$source"
+                PLACED_PATH="$candidate"
+                PLACED_NEW=false
+                git add -f -- "$candidate"
+                return
+              fi
+              number=$((number + 1))
+              candidate="$destination_dir/${stem}(${number})${suffix}"
+            done
+
+            echo "Moving '$source' to '$candidate'"
+            mv -- "$source" "$candidate"
+            PLACED_PATH="$candidate"
+            PLACED_NEW=true
+            git add -f -- "$candidate"
+          }
+
+          # This folder stores commit-message text files, not GitHub Actions YAML.
+          mkdir -p workflow
+
+          # Migrate commit messages from the old location first.
+          if [ -d texts/workflow ]; then
+            while IFS= read -r -d '' OLD_FILE; do
+              place_file "$OLD_FILE" workflow
+            done < <(find texts/workflow \( -type f -o -type l \) -print0)
           fi
-          
-          echo "Moving '$ORIG_FILE' to '$TARGET_DIR/$FILE'"
-          mv "$ORIG_FILE" "$TARGET_DIR/$FILE"
-          
-          TARGET_PATH="$TARGET_DIR/$FILE"
-          
-          # Create commit message
-          {
-            echo "Add downloaded file \"$FILE\""
-            echo ""
-            echo "Metadata:"
-            echo "- Size: $FILE_SIZE_HR"
-            echo "- Type: $FILE_TYPE"
-            echo "- Modified Time: $FILE_MOD_TIME"
-            echo "- CRC32: $FILE_CRC32"
-            echo "- MD5: $FILE_MD5"
-            echo "- SHA1: $FILE_SHA1"
-            echo "- SHA256: $FILE_SHA256"
-            echo "- Source URL: ${{ github.event.inputs.url }}"
-          } > "$MSG_FILE"
-          
-          # Commit and push
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          
-          # Add the specific files we created/downloaded
-          git add "$TARGET_PATH"
-          git add "$MSG_FILE"
-          
+
+          # Flatten existing subfolders. Keep Git internals, GitHub configuration,
+          # and the commit-message folder in their proper locations.
+          while IFS= read -r -d '' OLD_FILE; do
+            place_file "$OLD_FILE" .
+          done < <(
+            find . \( -path './.git' -o -path './.github' -o -path './workflow' \) -prune \
+              -o \( -type f -o -type l \) -path './*/*' -print0
+          )
+
+          # Remove the emptied folders, working from children to parents.
+          while IFS= read -r -d '' OLD_DIR; do
+            rmdir -- "$OLD_DIR" 2>/dev/null || true
+          done < <(
+            find . \( -path './.git' -o -path './.github' -o -path './workflow' \) -prune \
+              -o -type d ! -path . -print0 | sort -zr
+          )
+
+          # Every download goes directly into the repository root.
+          place_file "$DOWNLOADED_PATH" .
+          FILE="${PLACED_PATH##*/}"
+          DOWNLOAD_ADDED="$PLACED_NEW"
+
+          # Include file moves and deletions, even if the download was a duplicate.
+          git add -A
           if git diff --staged --quiet; then
             echo "No changes to commit"
-          else
-            git commit -F "$MSG_FILE"
-            git push
+            exit 0
           fi
+
+          # mktemp prevents a new log from overwriting an existing commit message.
+          MSG_FILE=$(mktemp "workflow/commit_msg_${TIMESTAMP}_XXXXXX.txt")
+          {
+            if [ "$DOWNLOAD_ADDED" = true ]; then
+              printf 'Add downloaded file "%s" and flatten existing folders\n' "$FILE"
+            else
+              printf 'Flatten existing folders (download already exists)\n'
+            fi
+            printf '\nMetadata:\n'
+            printf -- '- File: %s\n' "$FILE"
+            printf -- '- Size: %s\n' "$FILE_SIZE_HR"
+            printf -- '- Type: %s\n' "$FILE_TYPE"
+            printf -- '- Modified Time: %s\n' "$FILE_MOD_TIME"
+            printf -- '- CRC32: %s\n' "$FILE_CRC32"
+            printf -- '- MD5: %s\n' "$FILE_MD5"
+            printf -- '- SHA1: %s\n' "$FILE_SHA1"
+            printf -- '- SHA256: %s\n' "$FILE_SHA256"
+            printf -- '- Source URL: %s\n' "$DOWNLOAD_URL"
+          } > "$MSG_FILE"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f -- "$MSG_FILE"
+          git commit -F "$MSG_FILE"
+          git push
