@@ -1,6 +1,9 @@
 name: Download and Commit File
 
 on:
+  push:
+    branches:
+      - '**'
   workflow_dispatch:
     inputs:
       url:
@@ -9,7 +12,7 @@ on:
         default: ''
         type: string
       move_existing_files:
-        description: 'Move existing files to root, update logs, and rebuild list.txt'
+        description: 'Move existing files to root and update previous commit messages'
         required: false
         default: false
         type: boolean
@@ -23,22 +26,25 @@ concurrency:
 
 jobs:
   download-and-commit:
+    if: ${{ github.event_name != 'push' || !github.event.deleted }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@main
-
+        
       - name: Download, reorganize, update logs and list, and commit
         shell: bash
         env:
           DOWNLOAD_URL: ${{ inputs.url }}
           MOVE_EXISTING_FILES: ${{ inputs.move_existing_files }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           set -euo pipefail
 
           DOWNLOAD_URL="${DOWNLOAD_URL:-}"
           MOVE_EXISTING_FILES="${MOVE_EXISTING_FILES:-false}"
-          if [[ -z "$DOWNLOAD_URL" && "$MOVE_EXISTING_FILES" != true ]]; then
+          EVENT_NAME="${EVENT_NAME:-workflow_dispatch}"
+          if [[ -z "$DOWNLOAD_URL" && "$MOVE_EXISTING_FILES" != true && "$EVENT_NAME" != push ]]; then
             echo "No URL provided and moving existing files is disabled. Nothing to do."
             exit 0
           fi
@@ -213,6 +219,28 @@ jobs:
               print(f"Updated {updated_count} previous commit-message files.")
 
 
+          def migrate_list_name():
+              legacy = Path("list.txt")
+              if not legacy.is_file() or legacy.is_symlink():
+                  return
+              try:
+                  lines = legacy.read_text(encoding="utf-8").splitlines()
+              except UnicodeError:
+                  return
+              # Only migrate the old generated index, preserving other files
+              # that happen to be named list.txt.
+              if BASE_URL + "list.txt" not in lines:
+                  return
+              if not all(line.startswith(BASE_URL) for line in lines):
+                  return
+              target = Path("liste.txt")
+              if target.exists() or target.is_symlink():
+                  legacy.unlink()
+              else:
+                  legacy.rename(target)
+              print("Migrated the generated list.txt index to liste.txt.")
+
+
           def build_file_list():
               # The staged Git index contains all files that will be committed,
               # including nested files, and excludes internal .git metadata.
@@ -220,7 +248,7 @@ jobs:
                   ["git", "ls-files", "--cached", "-z"]
               ).split(b"\0"))
               paths.discard(b"")
-              paths.add(b"list.txt")
+              paths.add(b"liste.txt")
               links = [
                   BASE_URL + quote_from_bytes(path, safe="/")
                   for path in sorted(
@@ -231,10 +259,10 @@ jobs:
                       ),
                   )
               ]
-              Path("list.txt").write_text(
+              Path("liste.txt").write_text(
                   "\n".join(links) + "\n", encoding="utf-8"
               )
-              print(f"Updated list.txt with {len(links)} site links.")
+              print(f"Updated liste.txt with {len(links)} site links.")
 
 
           if sys.argv[1] == "size":
@@ -245,9 +273,13 @@ jobs:
               update_old_logs()
           elif sys.argv[1] == "index":
               build_file_list()
+          elif sys.argv[1] == "migrate-index":
+              migrate_list_name()
           else:
               raise SystemExit("Unknown metadata command")
           PY
+
+          python3 "$TEMP_DIR/metadata.py" migrate-index
 
           if [[ -n "$DOWNLOAD_URL" ]]; then
             # Download outside the repository so temporary files are never committed.
@@ -296,8 +328,8 @@ jobs:
             fi
             candidate="$destination_dir/$filename"
 
-            # Reserve list.txt for the generated index when rebuilding it.
-            if [[ "$MOVE_EXISTING_FILES" == true && "$candidate" == ./list.txt ]]; then
+            # Reserve liste.txt for the automatically refreshed index.
+            if [[ "$candidate" == ./liste.txt ]]; then
               number=1
               candidate="$destination_dir/${stem}(${number})${suffix}"
             fi
@@ -368,10 +400,9 @@ jobs:
 
           # Include file moves and deletions, even if the download was a duplicate.
           git add -A
-          if [[ "$MOVE_EXISTING_FILES" == true ]]; then
-            python3 "$TEMP_DIR/metadata.py" index
-            git add -f -- list.txt
-          fi
+          # Refresh the list for downloads, migrations, and direct repository pushes.
+          python3 "$TEMP_DIR/metadata.py" index
+          git add -f -- liste.txt
           if git diff --staged --quiet; then
             echo "No changes to commit"
             exit 0
@@ -388,7 +419,7 @@ jobs:
             if [ "$DOWNLOAD_ADDED" = true ]; then
               printf 'Add downloaded file "%s"\n' "$FILE"
             else
-              printf 'Reorganize repository files, update logs and file list\n'
+              printf 'Update repository file list and metadata\n'
             fi
             printf '\nMove existing files to root: %s\n' "$MOVE_EXISTING_FILES"
             if [[ -n "$DOWNLOAD_URL" ]]; then
@@ -411,10 +442,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -f -- "$MSG_FILE"
-          if [[ "$MOVE_EXISTING_FILES" == true ]]; then
-            # Include this run's new commit-message file in the final listing.
-            python3 "$TEMP_DIR/metadata.py" index
-            git add -f -- list.txt
-          fi
+          # Include this run's new commit-message file in the final listing.
+          python3 "$TEMP_DIR/metadata.py" index
+          git add -f -- liste.txt
           git commit -F "$MSG_FILE"
           git push
