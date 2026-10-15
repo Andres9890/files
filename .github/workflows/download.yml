@@ -4,9 +4,15 @@ on:
   workflow_dispatch:
     inputs:
       url:
-        description: 'URL of the file to download'
-        required: true
+        description: 'URL of the file to download (optional)'
+        required: false
+        default: ''
         type: string
+      move_existing_files:
+        description: 'Move existing files from folders to the repo root'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -26,42 +32,57 @@ jobs:
         shell: bash
         env:
           DOWNLOAD_URL: ${{ inputs.url }}
+          MOVE_EXISTING_FILES: ${{ inputs.move_existing_files }}
         run: |
           set -euo pipefail
+
+          DOWNLOAD_URL="${DOWNLOAD_URL:-}"
+          MOVE_EXISTING_FILES="${MOVE_EXISTING_FILES:-false}"
+          if [[ -z "$DOWNLOAD_URL" && "$MOVE_EXISTING_FILES" != true ]]; then
+            echo "No URL provided and moving existing files is disabled. Nothing to do."
+            exit 0
+          fi
 
           TIMESTAMP=$(TZ=UTC date +"%Y-%m-%d_%H-%M-%S")
           TEMP_DIR=$(mktemp -d "${RUNNER_TEMP:-/tmp}/repo-download.XXXXXX")
           trap 'rm -rf -- "$TEMP_DIR"' EXIT
+          DOWNLOADED_PATH=""
+          DOWNLOAD_ADDED=false
+          FILE=""
 
-          # Download outside the repository so temporary files are never committed.
-          (
-            cd "$TEMP_DIR"
-            curl --fail --silent --show-error --location --globoff \
-              --remote-name --remote-header-name -- "$DOWNLOAD_URL"
-          )
+          if [[ -n "$DOWNLOAD_URL" ]]; then
+            # Download outside the repository so temporary files are never committed.
+            (
+              cd "$TEMP_DIR"
+              curl --fail --silent --show-error --location --globoff \
+                --remote-name --remote-header-name -- "$DOWNLOAD_URL"
+            )
 
-          mapfile -d '' -t DOWNLOADS < <(find "$TEMP_DIR" -maxdepth 1 -type f -print0)
-          if [ "${#DOWNLOADS[@]}" -ne 1 ]; then
-            echo "Error: Download failed or did not save exactly one file."
-            exit 1
+            mapfile -d '' -t DOWNLOADS < <(find "$TEMP_DIR" -maxdepth 1 -type f -print0)
+            if [ "${#DOWNLOADS[@]}" -ne 1 ]; then
+              echo "Error: Download failed or did not save exactly one file."
+              exit 1
+            fi
+            DOWNLOADED_PATH="${DOWNLOADS[0]}"
+            echo "Downloaded file: ${DOWNLOADED_PATH##*/}"
+
+            FILE_SIZE=$(wc -c < "$DOWNLOADED_PATH")
+            MAX_SIZE=$((100 * 1024 * 1024))
+            if [ "$FILE_SIZE" -gt "$MAX_SIZE" ]; then
+              echo "Error: File size ($((FILE_SIZE / 1024 / 1024)) MB) exceeds the 100MB limit."
+              exit 1
+            fi
+
+            FILE_TYPE=$(file -b -- "$DOWNLOADED_PATH")
+            FILE_SIZE_HR=$(numfmt --to=iec --suffix=B "$FILE_SIZE")
+            FILE_MD5=$(md5sum -- "$DOWNLOADED_PATH" | awk '{print $1}')
+            FILE_SHA1=$(sha1sum -- "$DOWNLOADED_PATH" | awk '{print $1}')
+            FILE_SHA256=$(sha256sum -- "$DOWNLOADED_PATH" | awk '{print $1}')
+            FILE_CRC32=$(python3 -c "import sys, binascii; print(format(binascii.crc32(open(sys.argv[1], 'rb').read()) & 0xFFFFFFFF, '08x'))" "$DOWNLOADED_PATH")
+            FILE_MOD_TIME=$(stat -c "%y" -- "$DOWNLOADED_PATH")
+          else
+            echo "No URL provided; skipping download."
           fi
-          DOWNLOADED_PATH="${DOWNLOADS[0]}"
-          echo "Downloaded file: ${DOWNLOADED_PATH##*/}"
-
-          FILE_SIZE=$(wc -c < "$DOWNLOADED_PATH")
-          MAX_SIZE=$((100 * 1024 * 1024))
-          if [ "$FILE_SIZE" -gt "$MAX_SIZE" ]; then
-            echo "Error: File size ($((FILE_SIZE / 1024 / 1024)) MB) exceeds the 100MB limit."
-            exit 1
-          fi
-
-          FILE_TYPE=$(file -b -- "$DOWNLOADED_PATH")
-          FILE_SIZE_HR=$(numfmt --to=iec --suffix=B "$FILE_SIZE")
-          FILE_MD5=$(md5sum -- "$DOWNLOADED_PATH" | awk '{print $1}')
-          FILE_SHA1=$(sha1sum -- "$DOWNLOADED_PATH" | awk '{print $1}')
-          FILE_SHA256=$(sha256sum -- "$DOWNLOADED_PATH" | awk '{print $1}')
-          FILE_CRC32=$(python3 -c "import sys, binascii; print(format(binascii.crc32(open(sys.argv[1], 'rb').read()) & 0xFFFFFFFF, '08x'))" "$DOWNLOADED_PATH")
-          FILE_MOD_TIME=$(stat -c "%y" -- "$DOWNLOADED_PATH")
 
           # Move without overwriting existing files. Identical files are reused;
           # different files with the same name become name(1).ext, name(2).ext, etc.
@@ -100,34 +121,40 @@ jobs:
           # This folder stores commit-message text files, not GitHub Actions YAML.
           mkdir -p workflow
 
-          # Migrate commit messages from the old location first.
-          if [ -d texts/workflow ]; then
+          if [[ "$MOVE_EXISTING_FILES" == true ]]; then
+            # Migrate commit messages from the old location first.
+            if [ -d texts/workflow ]; then
+              while IFS= read -r -d '' OLD_FILE; do
+                place_file "$OLD_FILE" workflow
+              done < <(find texts/workflow \( -type f -o -type l \) -print0)
+            fi
+
+            # Flatten existing subfolders. Keep Git internals, GitHub configuration,
+            # and the commit-message folder in their proper locations.
             while IFS= read -r -d '' OLD_FILE; do
-              place_file "$OLD_FILE" workflow
-            done < <(find texts/workflow \( -type f -o -type l \) -print0)
+              place_file "$OLD_FILE" .
+            done < <(
+              find . \( -path './.git' -o -path './.github' -o -path './workflow' \) -prune \
+                -o \( -type f -o -type l \) -path './*/*' -print0
+            )
+
+            # Remove the emptied folders, working from children to parents.
+            while IFS= read -r -d '' OLD_DIR; do
+              rmdir -- "$OLD_DIR" 2>/dev/null || true
+            done < <(
+              find . \( -path './.git' -o -path './.github' -o -path './workflow' \) -prune \
+                -o -type d ! -path . -print0 | sort -zr
+            )
+          else
+            echo "Moving existing files is disabled; keeping existing folders."
           fi
 
-          # Flatten existing subfolders. Keep Git internals, GitHub configuration,
-          # and the commit-message folder in their proper locations.
-          while IFS= read -r -d '' OLD_FILE; do
-            place_file "$OLD_FILE" .
-          done < <(
-            find . \( -path './.git' -o -path './.github' -o -path './workflow' \) -prune \
-              -o \( -type f -o -type l \) -path './*/*' -print0
-          )
-
-          # Remove the emptied folders, working from children to parents.
-          while IFS= read -r -d '' OLD_DIR; do
-            rmdir -- "$OLD_DIR" 2>/dev/null || true
-          done < <(
-            find . \( -path './.git' -o -path './.github' -o -path './workflow' \) -prune \
-              -o -type d ! -path . -print0 | sort -zr
-          )
-
           # Every download goes directly into the repository root.
-          place_file "$DOWNLOADED_PATH" .
-          FILE="${PLACED_PATH##*/}"
-          DOWNLOAD_ADDED="$PLACED_NEW"
+          if [[ -n "$DOWNLOADED_PATH" ]]; then
+            place_file "$DOWNLOADED_PATH" .
+            FILE="${PLACED_PATH##*/}"
+            DOWNLOAD_ADDED="$PLACED_NEW"
+          fi
 
           # Include file moves and deletions, even if the download was a duplicate.
           git add -A
@@ -140,20 +167,25 @@ jobs:
           MSG_FILE=$(mktemp "workflow/commit_msg_${TIMESTAMP}_XXXXXX.txt")
           {
             if [ "$DOWNLOAD_ADDED" = true ]; then
-              printf 'Add downloaded file "%s" and flatten existing folders\n' "$FILE"
+              printf 'Add downloaded file "%s"\n' "$FILE"
             else
-              printf 'Flatten existing folders (download already exists)\n'
+              printf 'Reorganize existing repository files\n'
             fi
-            printf '\nMetadata:\n'
-            printf -- '- File: %s\n' "$FILE"
-            printf -- '- Size: %s\n' "$FILE_SIZE_HR"
-            printf -- '- Type: %s\n' "$FILE_TYPE"
-            printf -- '- Modified Time: %s\n' "$FILE_MOD_TIME"
-            printf -- '- CRC32: %s\n' "$FILE_CRC32"
-            printf -- '- MD5: %s\n' "$FILE_MD5"
-            printf -- '- SHA1: %s\n' "$FILE_SHA1"
-            printf -- '- SHA256: %s\n' "$FILE_SHA256"
-            printf -- '- Source URL: %s\n' "$DOWNLOAD_URL"
+            printf '\nMove existing files to root: %s\n' "$MOVE_EXISTING_FILES"
+            if [[ -n "$DOWNLOAD_URL" ]]; then
+              printf '\nMetadata:\n'
+              printf -- '- File: %s\n' "$FILE"
+              printf -- '- Size: %s\n' "$FILE_SIZE_HR"
+              printf -- '- Type: %s\n' "$FILE_TYPE"
+              printf -- '- Modified Time: %s\n' "$FILE_MOD_TIME"
+              printf -- '- CRC32: %s\n' "$FILE_CRC32"
+              printf -- '- MD5: %s\n' "$FILE_MD5"
+              printf -- '- SHA1: %s\n' "$FILE_SHA1"
+              printf -- '- SHA256: %s\n' "$FILE_SHA256"
+              printf -- '- Source URL: %s\n' "$DOWNLOAD_URL"
+            else
+              printf '\nNo download requested.\n'
+            fi
           } > "$MSG_FILE"
 
           git config user.name "github-actions[bot]"
