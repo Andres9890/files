@@ -1,7 +1,7 @@
 Add downloaded file "FxU3MySyj28.info.json"
 
 Metadata:
-- Size: 550KB
+- Size: 549.787109375 KiB (562982 bytes)
 - Type: JSON text data
 - Modified Time: 2026-03-06 10:19:01.950396489 +0000
 - CRC32: 8c7b46ba
@@ -9,3 +9,4 @@ Metadata:
 - SHA1: 3bf13546c5dbb5cd60a7401ca3f72db50fe64233
 - SHA256: c7de28e82cc9c5db90db7a21d7958b631855d601b94af668641789ff7a0117de
 - Source URL: https://archive.org/download/youtube-FxU3MySyj28/FxU3MySyj28.info.json
+- Current URL: https://andres9890.github.io/files/FxU3MySyj28.info.json
