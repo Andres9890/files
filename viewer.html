@@ -85,6 +85,13 @@
     .filter:active{background:var(--border)}
     .filter[aria-pressed="true"]{background:var(--tint);color:var(--accent);border-color:var(--accent);font-weight:550}
     .filter span{margin-left:8px;font-size:12px;font-weight:400;font-variant-numeric:tabular-nums}
+    .location-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 24px;border-top:1px solid var(--border)}
+    .breadcrumbs{display:flex;align-items:center;flex-wrap:wrap;gap:4px;min-width:0;font-size:13px}
+    .breadcrumbs>svg{width:14px;height:14px;color:var(--muted)}
+    .crumb-button{min-height:36px;padding:6px 8px;border:0;border-radius:6px;background:transparent;color:var(--muted);font-size:13px;overflow-wrap:anywhere;text-align:left}
+    .crumb-button:hover{background:var(--raised);color:var(--accent)}
+    .current-folder{padding:6px 8px;min-width:0;overflow-wrap:anywhere;font-weight:550}
+    .up-button{min-height:36px;padding:6px 10px;flex-shrink:0}
     .notice{margin:0 24px 20px;padding:12px 16px;border:1px solid var(--warn-border);border-radius:8px;background:var(--warn-bg);color:var(--warn);font-size:14px;white-space:pre-line}
     .list-head,.file-row{display:grid;grid-template-columns:minmax(0,1fr) 112px 148px;gap:16px;align-items:center;padding:0 24px}
     .list-head{min-height:44px;border-block:1px solid var(--border);background:var(--raised);color:var(--muted);font-size:12px;font-weight:500}
@@ -95,6 +102,9 @@
     .file-main{min-width:0;display:flex;align-items:center;gap:16px;padding:16px 0}
     .file-icon{width:40px;height:44px;display:grid;place-items:center;flex-shrink:0;border:1px solid var(--border);border-radius:8px;background:var(--raised);color:var(--muted)}
     .file-icon svg{width:22px;height:22px}
+    .folder-row .file-icon{background:var(--tint);color:var(--accent)}
+    .folder-name{border:0;padding:0;background:transparent;text-align:left}
+    .download-link[aria-busy="true"]{opacity:.45;cursor:progress}
     .file-info{min-width:0;flex:1}
     .file-name{display:block;max-width:100%;width:fit-content;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:14px;line-height:1.5;font-weight:550;transition:color var(--feedback)}
     .file-name:hover{color:var(--accent);text-decoration:underline;text-underline-offset:3px}
@@ -141,6 +151,7 @@
     .preview-body pre{justify-self:stretch;align-self:start;margin:0;white-space:pre-wrap;overflow-wrap:anywhere;tab-size:4;font:13px/1.7 ui-monospace,SFMono-Regular,Consolas,monospace}
     .preview-message{color:var(--muted);font-size:14px;text-align:center}
     .preview-footer{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:8px;padding:16px 24px;border-top:1px solid var(--border)}
+    .download-feedback{flex-basis:100%;margin:0;color:var(--muted);font-size:13px;overflow-wrap:anywhere}
     .toast{position:fixed;bottom:max(24px,env(safe-area-inset-bottom));left:50%;z-index:10;max-width:calc(100vw - 32px);transform:translateX(-50%);padding:12px 20px;border-radius:8px;background:var(--text);color:var(--panel);box-shadow:var(--shadow);font-size:14px;text-align:center}
     .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
     @media(max-width:720px){
@@ -161,6 +172,8 @@
       select{font-size:16px}
       .filters{padding:0 16px 16px;gap:8px}
       .filter{min-height:44px;font-size:12px;padding:8px 10px}
+      .location-bar{padding:8px 16px;gap:8px}
+      .crumb-button,.up-button{min-height:44px}
       .list-head{padding-inline:16px;grid-template-columns:1fr}
       .list-head .size-heading,.list-head span:last-child{display:none}
       .file-row{padding:16px;grid-template-columns:minmax(0,1fr) 148px;gap:12px 8px}
@@ -210,12 +223,12 @@
   </svg>
   <header class="topbar">
     <div class="wrap">
-      <a class="brand" href="https://github.com/Andres9890/files" target="_blank" rel="noopener noreferrer" aria-label="files">
+      <a class="brand" href="https://github.com/Andres9890/files" target="_blank" rel="noopener noreferrer" aria-label="Andres9890 files on GitHub">
         <span class="brand-mark"><svg aria-hidden="true"><use href="#i-folder"/></svg></span>
         <span><span class="brand-owner">Andres9890</span><span class="slash">/</span><strong>files</strong></span>
       </a>
       <div class="top-actions">
-        <a class="button quiet" href="https://github.com/Andres9890/files" target="_blank" rel="noopener noreferrer" aria-label="GitHub"><svg aria-hidden="true"><use href="#i-external"/></svg><span class="label">Repository</span></a>
+        <a class="button quiet" href="https://github.com/Andres9890/files" target="_blank" rel="noopener noreferrer" aria-label="View repository on GitHub"><svg aria-hidden="true"><use href="#i-external"/></svg><span class="label">Repository</span></a>
         <button class="button theme-toggle" id="theme" type="button" aria-label="Switch to dark theme" aria-pressed="false" title="Switch to dark theme"><svg aria-hidden="true"><use href="#i-moon"/></svg></button>
         <button class="button primary" id="refresh" type="button" aria-label="Refresh file list"><svg aria-hidden="true"><use href="#i-refresh"/></svg><span class="label">Refresh</span></button>
       </div>
@@ -232,11 +245,12 @@
     <section class="panel" aria-label="File browser">
       <div class="tools">
         <label class="field search-field" for="search"><span class="field-label">Search files</span><span class="search"><svg aria-hidden="true"><use href="#i-search"/></svg><input id="search" type="search" placeholder="Name or folder..." autocomplete="off" spellcheck="false"><kbd aria-hidden="true">/</kbd></span></label>
-        <label class="field" for="folder"><span class="field-label">Folder</span><select id="folder"><option value="">All folders</option><option value="/">Root folder only</option></select></label>
+        <label class="field" for="folder"><span class="field-label">Folder</span><select id="folder"><option value="">Root folder</option><option value="*">All files (recursive)</option></select></label>
         <label class="field" for="sort"><span class="field-label">Sort by</span><select id="sort"><option value="name-asc">Name: A to Z</option><option value="name-desc">Name: Z to A</option><option value="size-desc">Size: largest first</option><option value="size-asc">Size: smallest first</option><option value="type">File type</option></select></label>
       </div>
       <div class="filters" id="filters" role="group" aria-label="Filter by file type"></div>
       <p class="notice" id="notice" role="status" hidden></p>
+      <nav class="location-bar" aria-label="Folder navigation"><div class="breadcrumbs" id="breadcrumbs" tabindex="-1"><span class="current-folder" aria-current="page">Files</span></div><button class="button quiet up-button" id="up-folder" type="button" aria-label="Go to parent folder" hidden><svg aria-hidden="true"><use href="#i-left"/></svg>Up</button></nav>
       <div class="list-head" aria-hidden="true"><span>File name</span><span class="size-heading">Size</span><span>Actions</span></div>
       <div id="file-list" role="list" aria-label="Files" aria-busy="true"><div aria-hidden="true"><div class="skeleton-row"><span class="skeleton-icon"></span><span class="skeleton-lines"></span></div><div class="skeleton-row"><span class="skeleton-icon"></span><span class="skeleton-lines"></span></div><div class="skeleton-row"><span class="skeleton-icon"></span><span class="skeleton-lines"></span></div><div class="skeleton-row"><span class="skeleton-icon"></span><span class="skeleton-lines"></span></div></div></div>
       <div id="empty" class="empty" hidden><svg aria-hidden="true"><use href="#i-search"/></svg><h2 id="empty-title">No matching files</h2><p id="empty-description">Try another search or change your filters</p><button id="clear" type="button" class="button quiet" style="margin-top:16px">Clear filters</button></div>
@@ -248,7 +262,7 @@
   <dialog id="preview" aria-labelledby="preview-title">
     <div class="preview-head"><div><h2 id="preview-title"></h2><p id="preview-details"></p></div><button id="close-preview" class="icon-button" type="button" aria-label="Close preview" autofocus><svg aria-hidden="true"><use href="#i-close"/></svg></button></div>
     <div class="preview-body" id="preview-body"></div>
-    <div class="preview-footer"><a class="button quiet" id="preview-github" target="_blank" rel="noopener noreferrer">View on GitHub</a><a class="button quiet" id="preview-open" target="_blank" rel="noopener noreferrer">Open file <svg aria-hidden="true"><use href="#i-external"/></svg></a><a class="button primary" id="preview-download" rel="noopener noreferrer">Download <svg aria-hidden="true"><use href="#i-download"/></svg></a></div>
+    <div class="preview-footer"><p id="download-feedback" class="download-feedback" role="status" hidden></p><a class="button quiet" id="preview-github" target="_blank" rel="noopener noreferrer">View on GitHub</a><a class="button quiet" id="preview-open" target="_blank" rel="noopener noreferrer">Open file <svg aria-hidden="true"><use href="#i-external"/></svg></a><a class="button primary download-link" id="preview-download" rel="noopener noreferrer">Download <svg aria-hidden="true"><use href="#i-download"/></svg></a></div>
   </dialog>
   <div class="toast" id="toast" role="status" hidden></div>
   <script>
@@ -264,7 +278,7 @@
     const THEME_KEY = 'files-viewer-theme';
     const PAGE_SIZE = 100, TEXT_LIMIT = 1024 * 1024;
     const $ = id => document.getElementById(id);
-    const state = {files:[], type:'all', page:0, loaded:false, loading:false, source:'', time:null};
+    const state = {files:[], folders:[], type:'all', page:0, loaded:false, loading:false, source:'', time:null};
     const types = [ ['all','All files'], ['image','Images'], ['video','Videos'], ['audio','Audio'], ['archive','Archives'], ['document','Documents'], ['code','Code'], ['other','Other'] ];
     const extensions = {
       image:new Set('png jpg jpeg gif webp avif bmp svg ico apng'.split(' ')),
@@ -277,7 +291,8 @@
     const textTypes = new Set('txt md markdown csv tsv log html htm css js mjs cjs jsx ts tsx json xml yaml yml toml ini cfg conf py cs cpp c h sh bat cmd ps1 java lua rs go sql gitignore gitattributes editorconfig'.split(' '));
     const collator = new Intl.Collator('en',{numeric:true,sensitivity:'base'});
     const number = new Intl.NumberFormat('en-US');
-    let previewController = null, toastTimer, currentTheme = 'light';
+    let previewController = null, previewFile = null, toastTimer, currentTheme = 'light';
+    const pendingDownloads = new Set();
 
     function element(tag, cls, content) {
       const node = document.createElement(tag);
@@ -309,12 +324,8 @@
       for (const [key,set] of Object.entries(extensions)) if (set.has(ext)) return key;
       return /^(license|readme|notice|authors|changelog)$/i.test(fileName(path)) ? 'document' : 'other';
     }
-    function fileURL(file) {
-      // Jekyll normally omits dot/underscore paths; raw URLs keep those files accessible.
-      const unpublished = file.path.split('/').some(part => /^[._#~]/.test(part) || part === 'node_modules');
-      return (unpublished ? RAW : SITE) + encodedPath(file.path);
-    }
-    function downloadURL(file) { return `${GITHUB}/raw/refs/heads/${encodeURIComponent(BRANCH)}/${encodedPath(file.path)}?download=1`; }
+    function fileURL(file) { return SITE + encodedPath(file.path); }
+    function downloadURL(file) { return fileURL(file); }
     function sizeText(bytes) {
       if (!Number.isSafeInteger(bytes) || bytes < 0) return 'Unknown';
       if (bytes < 1000) return `${number.format(bytes)} ${bytes === 1 ? 'byte' : 'bytes'}`;
@@ -336,14 +347,21 @@
     function showNotice(message) { $('notice').textContent = message; $('notice').hidden = !message; }
     function status(text, mode = '') { $('status-text').textContent = text; $('status-dot').className = `dot ${mode}`; }
     function setFiles(files, source, time) {
+      const selectedFolder = state.loaded ? $('folder').value : folderFromURL();
       state.files = normalizedFiles(files); state.loaded = true; state.source = source; state.time = time;
-      const selectedFolder = $('folder').value, folders = new Set();
+      const folders = new Map();
       for (const file of state.files) {
         const parts = directory(file.path).split('/').filter(Boolean);
-        for (let i=1;i<=parts.length;i++) folders.add(parts.slice(0,i).join('/'));
+        for (let i=1;i<=parts.length;i++) {
+          const path=parts.slice(0,i).join('/');
+          if(!folders.has(path)) folders.set(path,{path,kind:'folder',count:0,size:0});
+          const folder=folders.get(path); folder.count++;
+          folder.size=folder.size===null || file.size===null ? null : folder.size+file.size;
+        }
       }
-      $('folder').replaceChildren(new Option('All folders',''),new Option('Root folder only','/'));
-      for (const folder of [...folders].sort(collator.compare)) $('folder').append(new Option(folder,folder));
+      state.folders=[...folders.values()].sort((a,b)=>collator.compare(a.path,b.path));
+      $('folder').replaceChildren(new Option('Root folder',''),new Option('All files (recursive)','*'));
+      for (const folder of state.folders) $('folder').append(new Option(folder.path,folder.path));
       $('folder').value = [...$('folder').options].some(o => o.value === selectedFolder) ? selectedFolder : '';
       $('total-files').textContent = number.format(state.files.length);
       const allSizesKnown = state.files.every(f => f.size !== null);
@@ -351,10 +369,45 @@
       $('total-size-label').textContent = 'total size';
       buildFilters(); render();
     }
+    function folderFromURL() {
+      try {return new URLSearchParams(location.hash.slice(1)).get('folder')||'';} catch {return '';}
+    }
+    function navigateFolder(path, updateURL = true, focus = true) {
+      $('folder').value=[...$('folder').options].some(option=>option.value===path)?path:'';
+      $('search').value=''; state.type='all'; state.page=0; buildFilters(); render();
+      if(updateURL) try {
+        const url=new URL(location.href);
+        url.hash=$('folder').value?'folder='+encodeURIComponent($('folder').value):'';
+        if(url.href!==location.href) history.pushState(null,'',url.href);
+      } catch { /* Folder navigation also works without browser history. */ }
+      if(focus) $('breadcrumbs').focus();
+    }
+    function renderBreadcrumbs() {
+      const folder=$('folder').value, crumbs=$('breadcrumbs'); crumbs.replaceChildren();
+      const crumb=(label,path,current=false)=>{
+        const node=element(current?'span':'button',current?'current-folder':'crumb-button',label);
+        if(current) node.setAttribute('aria-current','page');
+        else {node.type='button'; node.addEventListener('click',()=>navigateFolder(path));}
+        crumbs.append(node);
+      };
+      crumb('Files','',!folder);
+      if(folder==='*') {crumbs.append(icon('right')); crumb('All files','*',true);}
+      else if(folder) {
+        const parts=folder.split('/');
+        parts.forEach((part,index)=>{crumbs.append(icon('right')); crumb(part,parts.slice(0,index+1).join('/'),index===parts.length-1);});
+      }
+      $('up-folder').hidden=!folder || folder==='*';
+    }
     function buildFilters() {
       const counts = new Map(types.map(([key])=>[key,0]));
-      counts.set('all',state.files.length);
-      for (const file of state.files) {const key=category(file.path); counts.set(key,counts.get(key)+1);}
+      const selection=$('folder').value, folder=selection==='*'?'':selection, query=$('search').value.trim().toLocaleLowerCase();
+      for (const file of state.files) {
+        if(folder && !file.path.startsWith(folder+'/')) continue;
+        if(!query && selection!=='*' && directory(file.path)!==folder) continue;
+        if(query && !file.path.toLocaleLowerCase().includes(query)) continue;
+        counts.set('all',counts.get('all')+1);
+        const key=category(file.path); counts.set(key,counts.get(key)+1);
+      }
       $('filters').replaceChildren();
       for (const [key,label] of types) {
         if(key!=='all' && counts.get(key)===0 && state.type!==key) continue;
@@ -377,6 +430,19 @@
       const link=element('a',cls,label); link.href=href; link.target='_blank'; link.rel='noopener noreferrer'; return link;
     }
     function canPreview(file) { const ext=extension(file.path); return ['image','video','audio'].includes(category(file.path)) || textTypes.has(ext) || /^(license|readme|notice|authors|changelog)$/i.test(fileName(file.path)); }
+    function folderRow(folder) {
+      const name=fileName(folder.path), item=element('div','file-row folder-row'); item.setAttribute('role','listitem');
+      const main=element('div','file-main'), badge=element('span','file-icon'); badge.append(icon('folder'));
+      const info=element('div','file-info'), button=element('button','file-name folder-name',name); button.type='button';
+      button.title=folder.path; button.setAttribute('aria-label',`Open folder ${folder.path}`);
+      button.addEventListener('click',()=>navigateFolder(folder.path));
+      const meta=element('div','file-meta');
+      meta.append(element('span','file-type','FOLDER'),element('span','file-path',`${number.format(folder.count)} ${folder.count===1?'file':'files'}`));
+      info.append(button,meta); main.append(badge,info);
+      const size=element('span','file-size',sizeText(folder.size)); size.title=`Folder contents: ${detailedSize(folder.size)}`;
+      const actions=element('div','file-actions'); actions.append(actionButton(`Open folder ${folder.path}`,'right',()=>navigateFolder(folder.path)));
+      item.append(main,size,actions); return item;
+    }
     function row(file) {
       const name=fileName(file.path), kind=category(file.path), item=element('div','file-row'); item.setAttribute('role','listitem');
       const main=element('div','file-main'), badge=element('span',`file-icon ${kind}`);
@@ -390,16 +456,21 @@
       if (canPreview(file)) actions.append(actionButton(`Preview ${name}`,'eye',()=>openPreview(file)));
       else {const github=safeLink('',`${GITHUB}/blob/${encodeURIComponent(BRANCH)}/${encodedPath(file.path)}`,'icon-button'); github.title=`View ${name} on GitHub`; github.setAttribute('aria-label',github.title); github.append(icon('external')); actions.append(github);}
       actions.append(actionButton(`Copy link to ${name}`,'link',()=>copyLink(fileURL(file))));
-      const download=safeLink('',downloadURL(file),'icon-button'); download.removeAttribute('target'); download.download=name; download.title=`Download ${name}`; download.setAttribute('aria-label',download.title); download.append(icon('download')); actions.append(download);
+      const download=safeLink('',downloadURL(file),'icon-button download-link'); download.removeAttribute('target'); download.download=name; download.title=`Download ${name}`; download.setAttribute('aria-label',download.title); download.append(icon('download'));
+      download.addEventListener('click',event=>downloadFile(event,file,download)); actions.append(download);
       item.append(main,size,actions); return item;
     }
     function render() {
       if(!state.loaded && !state.loading) return;
-      const query=$('search').value.trim().toLocaleLowerCase(), folder=$('folder').value, order=$('sort').value;
-      const filtered=state.files.filter(file => {
-        return (!query || file.path.toLocaleLowerCase().includes(query)) && (state.type==='all' || category(file.path)===state.type) && (!folder || (folder==='/' ? !directory(file.path) : file.path.startsWith(`${folder}/`)));
+      const query=$('search').value.trim().toLocaleLowerCase(), selection=$('folder').value, order=$('sort').value;
+      const folder=selection==='*'?'':selection, recursive=!!query || selection==='*';
+      const inScope=path=>!folder || path.startsWith(folder+'/');
+      const folders=selection==='*'?[]:state.folders.filter(item=>inScope(item.path) && (query?item.path.toLocaleLowerCase().includes(query):directory(item.path)===folder));
+      const files=state.files.filter(file => {
+        return inScope(file.path) && (recursive || directory(file.path)===folder) && (!query || file.path.toLocaleLowerCase().includes(query)) && (state.type==='all' || category(file.path)===state.type);
       });
-      filtered.sort((a,b)=>{
+      folders.sort((a,b)=>(order==='name-desc'?-1:1)*collator.compare(a.path,b.path));
+      files.sort((a,b)=>{
         if (order.startsWith('size')) {
           if (a.size===null || b.size===null) {if(a.size!==b.size) return a.size===null?1:-1;}
           else if(a.size!==b.size) return order==='size-desc'?b.size-a.size:a.size-b.size;
@@ -407,15 +478,19 @@
         if (order==='type') {const compare=collator.compare(extension(a.path),extension(b.path)); if(compare) return compare;}
         const compare=collator.compare(a.path,b.path); return order==='name-desc'?-compare:compare;
       });
+      const filtered=[...folders,...files];
       const pages=Math.max(1,Math.ceil(filtered.length/PAGE_SIZE)); state.page=Math.min(state.page,pages-1);
       const start=state.page*PAGE_SIZE, visible=filtered.slice(start,start+PAGE_SIZE), fragment=document.createDocumentFragment();
-      for (const file of visible) fragment.append(row(file));
+      for (const entry of visible) fragment.append(entry.kind==='folder'?folderRow(entry):row(entry));
+      renderBreadcrumbs();
       $('file-list').replaceChildren(fragment); $('file-list').setAttribute('aria-busy',String(state.loading));
       $('empty').hidden=!state.loaded || filtered.length>0;
-      $('empty-title').textContent=state.files.length?'No matching files':'No files yet';
-      $('empty-description').textContent=state.files.length?'Try another search or change your filters':'This repository does not contain any files';
-      $('clear').hidden=!state.files.length;
-      $('result-count').textContent=!state.loaded?'Loading files...':filtered.length?`${number.format(start+1)}-${number.format(start+visible.length)} of ${number.format(filtered.length)} files${filtered.length!==state.files.length?` (${number.format(state.files.length)} total)`:''}`:'0 files';
+      const hasFilters=!!query || state.type!=='all';
+      $('empty-title').textContent=hasFilters?'No matching files':folder?'This folder is empty':'No files yet';
+      $('empty-description').textContent=hasFilters?'Try another search or change your filters':folder?'Use Up or the breadcrumbs to browse another folder':'This repository does not contain any files';
+      $('clear').hidden=!hasFilters;
+      const contents=folders.length?` · ${number.format(folders.length)} ${folders.length===1?'folder':'folders'}, ${number.format(files.length)} ${files.length===1?'file':'files'}`:'';
+      $('result-count').textContent=!state.loaded?'Loading files...':filtered.length?`${number.format(start+1)}-${number.format(start+visible.length)} of ${number.format(filtered.length)} ${folders.length?'items':'files'}${contents}`:'0 files';
       $('previous').disabled=state.page===0; $('next').disabled=state.page>=pages-1;
     }
     async function request(url, json = false) {
@@ -500,6 +575,36 @@
       } finally {state.loading=false; $('refresh').disabled=false; $('refresh').classList.remove('spin'); $('file-list').setAttribute('aria-busy','false');}
     }
     function toast(message) {clearTimeout(toastTimer); $('toast').textContent=message; $('toast').hidden=false; toastTimer=setTimeout(()=>$('toast').hidden=true,3000);}
+    function downloadFeedback(file, message) {
+      toast(message);
+      if($('preview').open && previewFile?.path===file.path) {
+        $('download-feedback').textContent=message; $('download-feedback').hidden=false;
+      }
+    }
+    async function downloadFile(event, file, link) {
+      if(event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || event.button>0) return;
+      const url=downloadURL(file), name=fileName(file.path);
+      // On the site, the download attribute streams directly through the browser.
+      // A local/cross-origin viewer first fetches the site URL and saves a Blob.
+      if(new URL(url).origin===location.origin) {downloadFeedback(file,'Download requested'); return;}
+      event.preventDefault();
+      if(pendingDownloads.has(file.path)) {downloadFeedback(file,'This download is already being prepared'); return;}
+      pendingDownloads.add(file.path); link.setAttribute('aria-busy','true'); link.setAttribute('aria-disabled','true');
+      const controller=new AbortController(), timer=setTimeout(()=>controller.abort(),120000);
+      downloadFeedback(file,`Preparing ${name}...`);
+      try {
+        const response=await fetch(url,{mode:'cors',credentials:'omit',signal:controller.signal});
+        if(!response.ok) throw new Error(response.status===404?'This file is not published at its site URL.':`The site could not provide this file (${response.status}).`);
+        const blob=await response.blob(), objectURL=URL.createObjectURL(blob), anchor=element('a');
+        anchor.href=objectURL; anchor.download=name; anchor.hidden=true; document.body.append(anchor);
+        try {anchor.click();} finally {anchor.remove(); setTimeout(()=>URL.revokeObjectURL(objectURL),60000);}
+        downloadFeedback(file,'Download ready');
+      } catch(error) {
+        downloadFeedback(file,controller.signal.aborted?'The download timed out. Please try again.':error instanceof TypeError?'Could not download from the site. Open this viewer on your site and try again.':error.message);
+      } finally {
+        clearTimeout(timer); pendingDownloads.delete(file.path); link.removeAttribute('aria-busy'); link.removeAttribute('aria-disabled');
+      }
+    }
     async function copyLink(url) {
       try {await navigator.clipboard.writeText(url); toast('Link copied');}
       catch {
@@ -528,6 +633,7 @@
     }
     async function openPreview(file) {
       previewController?.abort(); previewController=new AbortController();
+      previewFile=file; $('download-feedback').hidden=true;
       const controller=previewController, kind=category(file.path), body=$('preview-body'), name=fileName(file.path);
       $('preview-title').textContent=name; $('preview-details').textContent=`${file.path} · ${detailedSize(file.size)}`;
       $('preview-open').href=fileURL(file); $('preview-download').href=downloadURL(file); $('preview-download').download=name;
@@ -538,7 +644,7 @@
         if(kind==='image') media.alt=name;
         else {media.controls=true; media.preload='metadata'; if(kind==='video') media.playsInline=true;}
         media.addEventListener('error',()=>{if(!controller.signal.aborted) previewMessage('This preview could not load or the format is unsupported. Use Open file or Download to access it.');},{once:true});
-        // Pages supplies appropriate media MIME types; dotfiles use raw URLs.
+        // Media previews use the public site's media MIME types.
         media.src=fileURL(file); body.replaceChildren(media); return;
       }
       if(file.size!==null && file.size>TEXT_LIMIT) {previewMessage('This file is too large for a text preview. Use Open file or Download to read it.'); return;}
@@ -549,11 +655,18 @@
       } catch (error) {if($('preview').open && previewController===controller) previewMessage(controller.signal.aborted?'The preview timed out. Use Open file or Download to access it.':error.message);}
       finally {clearTimeout(timer);}
     }
-    $('preview').addEventListener('close',()=>{previewController?.abort(); $('preview-body').replaceChildren(); document.body.style.overflow='';});
+    $('preview-download').addEventListener('click',event=>previewFile && downloadFile(event,previewFile,$('preview-download')));
+    $('preview').addEventListener('close',()=>{previewController?.abort(); previewFile=null; $('preview-body').replaceChildren(); $('download-feedback').hidden=true; document.body.style.overflow='';});
     $('close-preview').addEventListener('click',()=>$('preview').close());
     $('preview').addEventListener('click',event=>{const r=$('preview').getBoundingClientRect(); if(event.target===$('preview') && (event.clientX<r.left || event.clientX>r.right || event.clientY<r.top || event.clientY>r.bottom)) $('preview').close();});
-    for(const id of ['search','folder','sort']) $(id).addEventListener(id==='search'?'input':'change',()=>{state.page=0; render();});
-    $('clear').addEventListener('click',()=>{$('search').value=''; $('folder').value=''; state.type='all'; state.page=0; buildFilters(); render(); $('search').focus();});
+    for(const id of ['search','sort']) $(id).addEventListener(id==='search'?'input':'change',()=>{state.page=0; if(id==='search') buildFilters(); render();});
+    $('folder').addEventListener('change',()=>navigateFolder($('folder').value,true,false));
+    $('up-folder').addEventListener('click',()=>navigateFolder(directory($('folder').value)));
+    $('clear').addEventListener('click',()=>{$('search').value=''; state.type='all'; state.page=0; buildFilters(); render(); $('search').focus();});
+    if(typeof addEventListener==='function') {
+      addEventListener('popstate',()=>{if(state.loaded) navigateFolder(folderFromURL(),false);});
+      addEventListener('hashchange',()=>{if(state.loaded && (!location.hash || location.hash.startsWith('#folder='))) navigateFolder(folderFromURL(),false);});
+    }
     for(const [id,change] of [['previous',-1],['next',1]]) $(id).addEventListener('click',()=>{state.page+=change; render(); document.querySelector('.panel').scrollIntoView({block:'start'});});
     $('refresh').addEventListener('click',loadFiles);
     document.addEventListener('keydown',event=>{if(event.key==='/' && !event.ctrlKey && !event.metaKey && !event.altKey && !$('preview').open && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName) && !document.activeElement?.isContentEditable) {event.preventDefault(); $('search').focus();}});
