@@ -276,6 +276,10 @@
     const RAW = `https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}/`;
     const CACHE_KEY = `file-viewer-v1:${OWNER}/${REPO}:${BRANCH}`;
     const THEME_KEY = 'files-viewer-theme';
+    const FILE_ALIASES = new Map([
+      ['worldbox_il2cpp2mono.apk.html','worldbox_il2cpp2mono.apk'],
+      ['fusionApp.apk.html','fusionApp.apk']
+    ]);
     const PAGE_SIZE = 100, TEXT_LIMIT = 1024 * 1024;
     const $ = id => document.getElementById(id);
     const state = {files:[], folders:[], type:'all', page:0, loaded:false, loading:false, source:'', time:null};
@@ -315,8 +319,9 @@
       $('theme').replaceChildren(icon(theme === 'dark' ? 'sun' : 'moon'));
       if(persist) try {localStorage.setItem(THEME_KEY,theme);} catch { /* Theme also works without storage. */ }
     }
+    function mappedPath(path) { return FILE_ALIASES.get(path) || path; }
     function encodedPath(path) { return path.split('/').map(encodeURIComponent).join('/'); }
-    function fileName(path) { return path.slice(path.lastIndexOf('/') + 1); }
+    function fileName(path) { const display=mappedPath(path); return display.slice(display.lastIndexOf('/') + 1); }
     function directory(path) { const i = path.lastIndexOf('/'); return i < 0 ? '' : path.slice(0,i); }
     function extension(path) { const name = fileName(path); return name.includes('.') ? name.slice(name.lastIndexOf('.') + 1).toLowerCase() : ''; }
     function category(path) {
@@ -324,7 +329,7 @@
       for (const [key,set] of Object.entries(extensions)) if (set.has(ext)) return key;
       return /^(license|readme|notice|authors|changelog)$/i.test(fileName(path)) ? 'document' : 'other';
     }
-    function fileURL(file) { return SITE + encodedPath(file.path); }
+    function fileURL(file) { return SITE + encodedPath(mappedPath(file.path)); }
     function downloadURL(file) { return fileURL(file); }
     function sizeText(bytes) {
       if (!Number.isSafeInteger(bytes) || bytes < 0) return 'Unknown';
@@ -404,7 +409,7 @@
       for (const file of state.files) {
         if(folder && !file.path.startsWith(folder+'/')) continue;
         if(!query && selection!=='*' && directory(file.path)!==folder) continue;
-        if(query && !file.path.toLocaleLowerCase().includes(query)) continue;
+        if(query && !mappedPath(file.path).toLocaleLowerCase().includes(query)) continue;
         counts.set('all',counts.get('all')+1);
         const key=category(file.path); counts.set(key,counts.get(key)+1);
       }
@@ -444,19 +449,21 @@
       item.append(main,size,actions); return item;
     }
     function row(file) {
-      const name=fileName(file.path), kind=category(file.path), item=element('div','file-row'); item.setAttribute('role','listitem');
+      const name=fileName(file.path), kind=category(file.path), isAlias=FILE_ALIASES.has(file.path), item=element('div','file-row'); item.setAttribute('role','listitem');
       const main=element('div','file-main'), badge=element('span',`file-icon ${kind}`);
       badge.append(icon(['image','video','audio','archive','code'].includes(kind)?kind:'file'));
-      const info=element('div','file-info'), link=safeLink(name,fileURL(file),'file-name'); link.title=file.path;
+      const info=element('div','file-info'), link=safeLink(name,fileURL(file),'file-name'); link.title=mappedPath(file.path);
       const meta=element('div','file-meta'), path=element('span','file-path',directory(file.path)||'Root folder'); path.title=directory(file.path)||'Root folder';
       meta.append(element('span','file-type',extension(file.path).toUpperCase()||'FILE'),path);
       info.append(link,meta); main.append(badge,info);
-      const size=element('span','file-size',sizeText(file.size)); size.title=detailedSize(file.size);
+      const size=element('span','file-size',isAlias?'Link':sizeText(file.size)); size.title=isAlias?'APK size unavailable':detailedSize(file.size);
       const actions=element('div','file-actions');
       if (canPreview(file)) actions.append(actionButton(`Preview ${name}`,'eye',()=>openPreview(file)));
       else {const github=safeLink('',`${GITHUB}/blob/${encodeURIComponent(BRANCH)}/${encodedPath(file.path)}`,'icon-button'); github.title=`View ${name} on GitHub`; github.setAttribute('aria-label',github.title); github.append(icon('external')); actions.append(github);}
       actions.append(actionButton(`Copy link to ${name}`,'link',()=>copyLink(fileURL(file))));
-      const download=safeLink('',downloadURL(file),'icon-button download-link'); download.removeAttribute('target'); download.download=name; download.title=`Download ${name}`; download.setAttribute('aria-label',download.title); download.append(icon('download'));
+      const download=safeLink('',downloadURL(file),'icon-button download-link');
+      if(!isAlias) {download.removeAttribute('target'); download.download=name;}
+      download.title=`Download ${name}`; download.setAttribute('aria-label',download.title); download.append(icon('download'));
       download.addEventListener('click',event=>downloadFile(event,file,download)); actions.append(download);
       item.append(main,size,actions); return item;
     }
@@ -467,7 +474,7 @@
       const inScope=path=>!folder || path.startsWith(folder+'/');
       const folders=selection==='*'?[]:state.folders.filter(item=>inScope(item.path) && (query?item.path.toLocaleLowerCase().includes(query):directory(item.path)===folder));
       const files=state.files.filter(file => {
-        return inScope(file.path) && (recursive || directory(file.path)===folder) && (!query || file.path.toLocaleLowerCase().includes(query)) && (state.type==='all' || category(file.path)===state.type);
+        return inScope(file.path) && (recursive || directory(file.path)===folder) && (!query || mappedPath(file.path).toLocaleLowerCase().includes(query)) && (state.type==='all' || category(file.path)===state.type);
       });
       folders.sort((a,b)=>(order==='name-desc'?-1:1)*collator.compare(a.path,b.path));
       files.sort((a,b)=>{
@@ -476,7 +483,7 @@
           else if(a.size!==b.size) return order==='size-desc'?b.size-a.size:a.size-b.size;
         }
         if (order==='type') {const compare=collator.compare(extension(a.path),extension(b.path)); if(compare) return compare;}
-        const compare=collator.compare(a.path,b.path); return order==='name-desc'?-compare:compare;
+        const compare=collator.compare(mappedPath(a.path),mappedPath(b.path)); return order==='name-desc'?-compare:compare;
       });
       const filtered=[...folders,...files];
       const pages=Math.max(1,Math.ceil(filtered.length/PAGE_SIZE)); state.page=Math.min(state.page,pages-1);
@@ -582,6 +589,8 @@
       }
     }
     async function downloadFile(event, file, link) {
+      // These two site routes must run their redirects to download the actual APK.
+      if(FILE_ALIASES.has(file.path)) return;
       if(event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || event.button>0) return;
       const url=downloadURL(file), name=fileName(file.path);
       // On the site, the download attribute streams directly through the browser.
