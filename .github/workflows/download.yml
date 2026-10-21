@@ -12,7 +12,7 @@ on:
         default: ''
         type: string
       move_existing_files:
-        description: 'Move existing files to root and update previous commit messages'
+        description: 'Move files, update commit messages, and generate release redirects'
         required: false
         default: false
         type: boolean
@@ -38,6 +38,7 @@ jobs:
           DOWNLOAD_URL: ${{ inputs.url }}
           MOVE_EXISTING_FILES: ${{ inputs.move_existing_files }}
           EVENT_NAME: ${{ github.event_name }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
@@ -62,12 +63,16 @@ jobs:
           # Shared metadata and listing helpers stay outside the repository.
           cat > "$TEMP_DIR/metadata.py" <<'PY'
           import hashlib
+          import html
+          import json
+          import os
           import re
           import subprocess
           import sys
           from decimal import Decimal, localcontext
           from pathlib import Path
           from urllib.parse import quote, quote_from_bytes
+          from urllib.request import Request, urlopen
 
           BASE_URL = "https://andres9890.github.io/files/"
           UNITS = ("B", "KB", "MB", "GB", "TB", "PB", "EB")
@@ -93,6 +98,125 @@ jobs:
 
           def current_url(filename):
               return BASE_URL + quote(filename, safe="")
+
+
+          def github_items(endpoint):
+              api_url = os.environ.get(
+                  "GITHUB_API_URL", "https://api.github.com"
+              ).rstrip("/")
+              headers = {
+                  "Accept": "application/vnd.github+json",
+                  "User-Agent": "release-redirect-generator",
+                  "X-GitHub-Api-Version": "2022-11-28",
+              }
+              token = os.environ.get("GITHUB_TOKEN", "")
+              if token:
+                  headers["Authorization"] = f"Bearer {token}"
+              page = 1
+              while True:
+                  request = Request(
+                      f"{api_url}{endpoint}?per_page=100&page={page}",
+                      headers=headers,
+                  )
+                  with urlopen(request, timeout=30) as response:
+                      items = json.load(response)
+                  if not isinstance(items, list):
+                      raise RuntimeError(
+                          f"GitHub returned an unexpected response for {endpoint}"
+                      )
+                  yield from items
+                  if len(items) < 100:
+                      break
+                  page += 1
+
+
+          def release_redirect_html(url):
+              attribute_url = html.escape(url, quote=True)
+              script_url = json.dumps(url, ensure_ascii=True).replace(
+                  "<", "\\u003c"
+              ).replace(">", "\\u003e").replace("&", "\\u0026")
+              return (
+                  '<!DOCTYPE html>\n<html>\n<head>\n'
+                  f'<meta http-equiv="refresh" content="0;url={attribute_url}">\n'
+                  f'<script>window.location.replace({script_url});</script>\n'
+                  '</head>\n<body></body>\n</html>\n'
+              )
+
+
+          def generate_release_redirects():
+              repository = os.environ.get("GITHUB_REPOSITORY", "")
+              if not re.fullmatch(r"[^/]+/[^/]+", repository):
+                  raise RuntimeError("GITHUB_REPOSITORY must contain owner/repo")
+              releases = sorted(
+                  (
+                      release for release in github_items(
+                          f"/repos/{repository}/releases"
+                      ) if not release.get("draft", False)
+                  ),
+                  key=lambda release: (
+                      release.get("published_at")
+                      or release.get("created_at", ""),
+                      release["id"],
+                  ),
+                  reverse=True,
+              )
+              selected = {}
+              for release in releases:
+                  # This endpoint lists uploaded assets, excluding GitHub's
+                  # generated zipball/tarball source archives. Uploaded ZIP
+                  # and tar.gz assets are included like every other file.
+                  for asset in github_items(
+                      f"/repos/{repository}/releases/{release['id']}/assets"
+                  ):
+                      if asset.get("state") != "uploaded":
+                          continue
+                      name = asset.get("name", "")
+                      url = asset.get("browser_download_url", "")
+                      if (
+                          not name or name in (".", "..")
+                          or "/" in name or "\\" in name or "\0" in name
+                      ):
+                          raise RuntimeError(f"Invalid release filename: {name!r}")
+                      if not url.startswith("https://"):
+                          raise RuntimeError(f"Invalid download URL for {name!r}")
+                      # A shared filename points to its newest published release.
+                      selected.setdefault(name, url)
+
+              changes = []
+              for name, url in sorted(
+                  selected.items(), key=lambda item: (item[0].casefold(), item[0])
+              ):
+                  target = Path(name + ".html")
+                  content = release_redirect_html(url)
+                  if target.is_symlink() or (
+                      target.exists() and not target.is_file()
+                  ):
+                      raise RuntimeError(f"Cannot replace non-file: {target}")
+                  if target.exists():
+                      existing = target.read_text(encoding="utf-8")
+                      if existing == content:
+                          continue
+                      # Existing minimal redirect pages can be refreshed;
+                      # unrelated HTML documents are preserved.
+                      if not re.fullmatch(
+                          r'\s*<!DOCTYPE html>\s*<html>\s*<head>\s*'
+                          r'<meta\b[^>]*http-equiv=["\x27]refresh["\x27][^>]*>\s*'
+                          r'<script>\s*window\.location\.replace\(.*?\);\s*</script>\s*'
+                          r'</head>\s*<body>\s*</body>\s*</html>\s*',
+                          existing, flags=re.IGNORECASE | re.DOTALL,
+                      ):
+                          raise RuntimeError(
+                              f"Refusing to overwrite unrelated HTML: {target}"
+                          )
+                  changes.append((target, content))
+
+              for target, content in changes:
+                  target.write_text(content, encoding="utf-8")
+                  subprocess.run(["git", "add", "-f", "--", str(target)], check=True)
+              print(
+                  f"Checked {len(selected)} release files; "
+                  f"created or updated {len(changes)} HTML redirects."
+              )
 
 
           def field(text, name):
@@ -275,6 +399,8 @@ jobs:
               build_file_list()
           elif sys.argv[1] == "migrate-index":
               migrate_list_name()
+          elif sys.argv[1] == "release-redirects":
+              generate_release_redirects()
           else:
               raise SystemExit("Unknown metadata command")
           PY
@@ -395,6 +521,7 @@ jobs:
           fi
 
           if [[ "$MOVE_EXISTING_FILES" == true ]]; then
+            python3 "$TEMP_DIR/metadata.py" release-redirects
             python3 "$TEMP_DIR/metadata.py" update
           fi
 
@@ -447,3 +574,4 @@ jobs:
           git add -f -- liste.txt
           git commit -F "$MSG_FILE"
           git push
+
