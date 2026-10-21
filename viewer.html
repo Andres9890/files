@@ -276,10 +276,6 @@
     const RAW = `https://raw.githubusercontent.com/${OWNER}/${REPO}/${BRANCH}/`;
     const CACHE_KEY = `file-viewer-v1:${OWNER}/${REPO}:${BRANCH}`;
     const THEME_KEY = 'files-viewer-theme';
-    const FILE_ALIASES = new Map([
-      ['worldbox_il2cpp2mono.apk.html','worldbox_il2cpp2mono.apk'],
-      ['fusionApp.apk.html','fusionApp.apk']
-    ]);
     const PAGE_SIZE = 100, TEXT_LIMIT = 1024 * 1024;
     const $ = id => document.getElementById(id);
     const state = {files:[], folders:[], type:'all', page:0, loaded:false, loading:false, source:'', time:null};
@@ -319,11 +315,13 @@
       $('theme').replaceChildren(icon(theme === 'dark' ? 'sun' : 'moon'));
       if(persist) try {localStorage.setItem(THEME_KEY,theme);} catch { /* Theme also works without storage. */ }
     }
-    function mappedPath(path) { return FILE_ALIASES.get(path) || path; }
+    function isRedirectPath(path) { return /(?:^|\/)[^/]+\.[^./]+\.html$/i.test(path); }
+    function mappedPath(path) { return isRedirectPath(path) ? path.slice(0,-5) : path; }
     function encodedPath(path) { return path.split('/').map(encodeURIComponent).join('/'); }
-    function fileName(path) { const display=mappedPath(path); return display.slice(display.lastIndexOf('/') + 1); }
+    function fileName(path) { return path.slice(path.lastIndexOf('/') + 1); }
+    function displayName(path) { return fileName(mappedPath(path)); }
     function directory(path) { const i = path.lastIndexOf('/'); return i < 0 ? '' : path.slice(0,i); }
-    function extension(path) { const name = fileName(path); return name.includes('.') ? name.slice(name.lastIndexOf('.') + 1).toLowerCase() : ''; }
+    function extension(path) { const name = displayName(path); return name.includes('.') ? name.slice(name.lastIndexOf('.') + 1).toLowerCase() : ''; }
     function category(path) {
       const ext = extension(path);
       for (const [key,set] of Object.entries(extensions)) if (set.has(ext)) return key;
@@ -434,7 +432,7 @@
     function safeLink(label, href, cls = '') {
       const link=element('a',cls,label); link.href=href; link.target='_blank'; link.rel='noopener noreferrer'; return link;
     }
-    function canPreview(file) { const ext=extension(file.path); return ['image','video','audio'].includes(category(file.path)) || textTypes.has(ext) || /^(license|readme|notice|authors|changelog)$/i.test(fileName(file.path)); }
+    function canPreview(file) { if(isRedirectPath(file.path)) return false; const ext=extension(file.path); return ['image','video','audio'].includes(category(file.path)) || textTypes.has(ext) || /^(license|readme|notice|authors|changelog)$/i.test(displayName(file.path)); }
     function folderRow(folder) {
       const name=fileName(folder.path), item=element('div','file-row folder-row'); item.setAttribute('role','listitem');
       const main=element('div','file-main'), badge=element('span','file-icon'); badge.append(icon('folder'));
@@ -449,14 +447,14 @@
       item.append(main,size,actions); return item;
     }
     function row(file) {
-      const name=fileName(file.path), kind=category(file.path), isAlias=FILE_ALIASES.has(file.path), item=element('div','file-row'); item.setAttribute('role','listitem');
+      const name=displayName(file.path), kind=category(file.path), isAlias=isRedirectPath(file.path), item=element('div','file-row'); item.setAttribute('role','listitem');
       const main=element('div','file-main'), badge=element('span',`file-icon ${kind}`);
       badge.append(icon(['image','video','audio','archive','code'].includes(kind)?kind:'file'));
       const info=element('div','file-info'), link=safeLink(name,fileURL(file),'file-name'); link.title=mappedPath(file.path);
       const meta=element('div','file-meta'), path=element('span','file-path',directory(file.path)||'Root folder'); path.title=directory(file.path)||'Root folder';
       meta.append(element('span','file-type',extension(file.path).toUpperCase()||'FILE'),path);
       info.append(link,meta); main.append(badge,info);
-      const size=element('span','file-size',isAlias?'Link':sizeText(file.size)); size.title=isAlias?'APK size unavailable':detailedSize(file.size);
+      const size=element('span','file-size',isAlias?'Link':sizeText(file.size)); size.title=isAlias?'File size unavailable':detailedSize(file.size);
       const actions=element('div','file-actions');
       if (canPreview(file)) actions.append(actionButton(`Preview ${name}`,'eye',()=>openPreview(file)));
       else {const github=safeLink('',`${GITHUB}/blob/${encodeURIComponent(BRANCH)}/${encodedPath(file.path)}`,'icon-button'); github.title=`View ${name} on GitHub`; github.setAttribute('aria-label',github.title); github.append(icon('external')); actions.append(github);}
@@ -589,10 +587,10 @@
       }
     }
     async function downloadFile(event, file, link) {
-      // These two site routes must run their redirects to download the actual APK.
-      if(FILE_ALIASES.has(file.path)) return;
+      // These site routes must run their redirects to reach the actual downloads.
+      if(isRedirectPath(file.path)) return;
       if(event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || event.button>0) return;
-      const url=downloadURL(file), name=fileName(file.path);
+      const url=downloadURL(file), name=displayName(file.path);
       // On the site, the download attribute streams directly through the browser.
       // A local/cross-origin viewer first fetches the site URL and saves a Blob.
       if(new URL(url).origin===location.origin) {downloadFeedback(file,'Download requested'); return;}
@@ -643,7 +641,7 @@
     async function openPreview(file) {
       previewController?.abort(); previewController=new AbortController();
       previewFile=file; $('download-feedback').hidden=true;
-      const controller=previewController, kind=category(file.path), body=$('preview-body'), name=fileName(file.path);
+      const controller=previewController, kind=category(file.path), body=$('preview-body'), name=displayName(file.path);
       $('preview-title').textContent=name; $('preview-details').textContent=`${file.path} · ${detailedSize(file.size)}`;
       $('preview-open').href=fileURL(file); $('preview-download').href=downloadURL(file); $('preview-download').download=name;
       $('preview-github').href=`${GITHUB}/blob/${encodeURIComponent(BRANCH)}/${encodedPath(file.path)}`;
