@@ -1,0 +1,252 @@
+name: Rename File
+
+on:
+  workflow_dispatch:
+    inputs:
+      old_path:
+        description: 'Current file path, including its extension (e.g. folder/old-name.zip)'
+        required: true
+        type: string
+      new_path:
+        description: 'New file path, including its extension (e.g. folder/new-name.zip)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+# Share the download workflow's lock so both workflows cannot push at once.
+concurrency:
+  group: download-and-commit-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  rename-file:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@main
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Rename file, update links, and commit
+        shell: bash
+        env:
+          OLD_PATH: ${{ inputs.old_path }}
+          NEW_PATH: ${{ inputs.new_path }}
+        run: |
+          python3 <<'PY'
+          import binascii
+          import hashlib
+          import json
+          import os
+          from pathlib import Path, PurePosixPath
+          import re
+          import subprocess
+          from datetime import datetime, timezone
+          from decimal import Decimal, localcontext
+          from urllib.parse import quote, quote_from_bytes
+
+          BASE_URL = "https://andres9890.github.io/files/"
+          UNITS = ("B", "KB", "MB", "GB", "TB", "PB", "EB")
+          GIT_ENV = dict(os.environ, GIT_LITERAL_PATHSPECS="1")
+
+
+          def git(*args):
+              return subprocess.run(
+                  ["git", *args], check=True, capture_output=True, env=GIT_ENV
+              ).stdout
+
+
+          def relative_path(value):
+              if not value or any(char in value for char in ("\0", "\r", "\n", "\\")):
+                  raise ValueError("Enter a relative file path using / between folders.")
+              path = PurePosixPath(value)
+              if path.is_absolute() or not path.parts or ".." in path.parts:
+                  raise ValueError("File paths must stay inside the repository.")
+              if ".git" in path.parts:
+                  raise ValueError("Git's internal files cannot be renamed.")
+              if path.parts[:2] == (".github", "workflows"):
+                  raise ValueError("Workflow YAML files must be renamed directly on GitHub.")
+              if path.as_posix() == "liste.txt":
+                  raise ValueError("liste.txt is generated automatically; choose another file.")
+              cursor = Path(".")
+              for part in path.parts[:-1]:
+                  cursor /= part
+                  if cursor.is_symlink():
+                      raise ValueError("File paths cannot pass through symbolic-link folders.")
+                  if cursor.exists() and not cursor.is_dir():
+                      raise ValueError(f"A parent path is not a folder: {cursor}")
+              return path.as_posix()
+
+
+          def format_size(size):
+              if size < 1024:
+                  return f"{size} bytes"
+              with localcontext() as context:
+                  context.prec = 100
+                  value = Decimal(size)
+                  unit = 0
+                  while value >= 1024 and unit < len(UNITS) - 1:
+                      value /= 1024
+                      unit += 1
+                  number = format(value, ".2f").rstrip("0").rstrip(".")
+              return f"{number} {UNITS[unit]} ({size} bytes)"
+
+
+          def update_commit_links(old_path, new_path):
+              old_url = BASE_URL + quote(old_path, safe="/")
+              new_url = BASE_URL + quote(new_path, safe="/")
+              changed = []
+              for log in sorted(Path("workflow").rglob("commit_msg_*.txt")):
+                  if not log.is_file() or log.is_symlink():
+                      continue
+                  try:
+                      original = log.read_text(encoding="utf-8")
+                  except UnicodeError:
+                      continue
+                  lines = original.splitlines()
+                  file_lines = [line for line in lines if line.startswith("- File: ")]
+                  matches = f"- File: {old_path}" in file_lines
+                  if not file_lines and lines:
+                      title = re.fullmatch(
+                          r'Add downloaded file "(.*)"'
+                          r'(?: and flatten existing folders)?', lines[0]
+                      )
+                      matches = bool(title and title.group(1) == old_path)
+                  matches = matches or any(
+                      line in (f"- Current URL: {old_url}", f"Current URL: {old_url}")
+                      for line in lines
+                  )
+                  if not matches:
+                      continue
+                  lines = [
+                      f"- File: {new_path}" if line == f"- File: {old_path}" else line
+                      for line in lines
+                      if not line.startswith(("- Current URL:", "Current URL:"))
+                  ]
+                  while lines and not lines[-1].strip():
+                      lines.pop()
+                  if not file_lines:
+                      lines.append(f"- File: {new_path}")
+                  lines.append(f"- Current URL: {new_url}")
+                  updated = "\n".join(lines) + "\n"
+                  if updated != original:
+                      log.write_text(updated, encoding="utf-8")
+                      changed.append(str(log))
+              return changed
+
+
+          def file_metadata(path):
+              md5 = hashlib.md5()
+              sha1 = hashlib.sha1()
+              sha256 = hashlib.sha256()
+              crc = 0
+              size = 0
+
+              def consume(chunk):
+                  nonlocal crc, size
+                  md5.update(chunk)
+                  sha1.update(chunk)
+                  sha256.update(chunk)
+                  crc = binascii.crc32(chunk, crc)
+                  size += len(chunk)
+
+              if path.is_symlink():
+                  consume(os.fsencode(os.readlink(path)))
+                  kind = "symbolic link"
+              else:
+                  with path.open("rb") as handle:
+                      for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                          consume(chunk)
+                  kind = subprocess.check_output(
+                      ["file", "-b", "--", str(path)], text=True
+                  ).strip()
+              modified = datetime.fromtimestamp(
+                  path.lstat().st_mtime, timezone.utc
+              ).isoformat(sep=" ", timespec="microseconds")
+              return [
+                  f"- Size: {format_size(size)}",
+                  f"- Type: {kind}",
+                  f"- Modified Time: {modified}",
+                  f"- CRC32: {crc & 0xFFFFFFFF:08x}",
+                  f"- MD5: {md5.hexdigest()}",
+                  f"- SHA1: {sha1.hexdigest()}",
+                  f"- SHA256: {sha256.hexdigest()}",
+              ]
+
+
+          def rebuild_file_list():
+              paths = set(git("ls-files", "--cached", "-z").split(b"\0"))
+              paths.discard(b"")
+              paths.add(b"liste.txt")
+              links = [
+                  BASE_URL + quote_from_bytes(path, safe="/")
+                  for path in sorted(
+                      paths,
+                      key=lambda path: (
+                          path.decode("utf-8", "surrogateescape").casefold(), path
+                      ),
+                  )
+              ]
+              target = Path("liste.txt")
+              if target.is_symlink():
+                  raise ValueError("liste.txt must be a regular file.")
+              target.write_text("\n".join(links) + "\n", encoding="utf-8")
+              git("add", "-f", "--", "liste.txt")
+
+
+          def main():
+              branch_ref = os.environ.get("GITHUB_REF", "")
+              if not branch_ref.startswith("refs/heads/"):
+                  raise ValueError("Select a branch when running this workflow.")
+              old_path = relative_path(os.environ.get("OLD_PATH", ""))
+              new_path = relative_path(os.environ.get("NEW_PATH", ""))
+              source = Path(old_path)
+              target = Path(new_path)
+              tracked = git("ls-files", "-z", "--", old_path).split(b"\0")
+              if os.fsencode(old_path) not in tracked:
+                  raise ValueError(f"The source file is not tracked: {old_path}")
+              if not source.is_file() and not source.is_symlink():
+                  raise ValueError("Choose an existing file, not a folder.")
+              if old_path == new_path:
+                  print("The current and new paths are identical. Nothing to rename.")
+                  return
+              if target.exists() or target.is_symlink() or git("ls-files", "-z", "--", new_path):
+                  raise ValueError(f"The destination already exists: {new_path}")
+
+              target.parent.mkdir(parents=True, exist_ok=True)
+              git("mv", "--", old_path, new_path)
+              changed_logs = update_commit_links(old_path, new_path)
+              if changed_logs:
+                  git("add", "-f", "--", *changed_logs)
+
+              timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d_%H-%M-%S")
+              log = Path(f"workflow/commit_msg_{timestamp}.txt")
+              number = 1
+              while log.exists() or log.is_symlink():
+                  log = Path(f"workflow/commit_msg_{timestamp}({number}).txt")
+                  number += 1
+              log.parent.mkdir(parents=True, exist_ok=True)
+              message = (
+                  f"Rename file {json.dumps(old_path, ensure_ascii=False)} "
+                  f"to {json.dumps(new_path, ensure_ascii=False)}"
+              )
+              lines = [message, "", "Metadata:",
+                  f"- Previous File: {old_path}", f"- File: {new_path}",
+                  *file_metadata(target),
+                  f"- Current URL: {BASE_URL + quote(new_path, safe='/')}",
+              ]
+              log.write_text("\n".join(lines) + "\n", encoding="utf-8")
+              git("add", "-f", "--", str(log))
+              rebuild_file_list()
+              git("config", "user.name", "github-actions[bot]")
+              git("config", "user.email", "41898282+github-actions[bot]@users.noreply.github.com")
+              git("commit", "-F", str(log))
+              git("push", "origin", f"HEAD:{branch_ref}")
+              print(message)
+              print(f"Updated liste.txt and {len(changed_logs)} existing commit messages.")
+
+
+          main()
+          PY
