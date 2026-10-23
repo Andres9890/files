@@ -1,0 +1,13 @@
+Rename file "tutorial.mp4" to "tutorial-Android.mp4"
+
+Metadata:
+- Previous File: tutorial.mp4
+- File: tutorial-Android.mp4
+- Size: 17.13 MB (17960755 bytes)
+- Type: ISO Media, MP4 Base Media v1 [ISO 14496-12:2003]
+- Modified Time: 2026-10-23 14:23:31.487810+00:00
+- CRC32: bf58ca33
+- MD5: 48513f4cd56baa4192ce8988822a4e7f
+- SHA1: 5f9576e0c8bff5341f95d8e26c0f3f147278fb24
+- SHA256: 0b6891295ba3ff3321d75587b2a1c9b0083f6b54f1c42b74e2c26340a6729b1c
+- Current URL: https://andres9890.github.io/files/tutorial-Android.mp4
