@@ -1,0 +1,15 @@
+Add downloaded file "tutorial-iOS.mp4"
+
+Move existing files to root: true
+
+Metadata:
+- File: tutorial-iOS.mp4
+- Size: 83.38 MB (87426667 bytes)
+- Type: ISO Media, MP4 Base Media v1 [ISO 14496-12:2003]
+- Modified Time: 2026-10-23 14:10:44.168433333 +0000
+- CRC32: e3324d37
+- MD5: 214f026a395f0ca596067087eee4074e
+- SHA1: e6112526d0c52b0d026e1b5f0be75a063d4e8a4b
+- SHA256: 4f3c8d78cf03a7f869c6b2cfb2d1eb2a41de2154b6a7f0564f4521a851873e6e
+- Source URL: https://s153-grog.freeconvert.com/task/6adb699f0f4ed69645dc4d6b/tutorial-iOS.mp4
+- Current URL: https://andres9890.github.io/files/tutorial-iOS.mp4

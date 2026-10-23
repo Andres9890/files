@@ -24,6 +24,7 @@ https://andres9890.github.io/files/sce.png
 https://andres9890.github.io/files/sce2.png
 https://andres9890.github.io/files/Screenshot%20%2829%29.png
 https://andres9890.github.io/files/staffguide.pdf
+https://andres9890.github.io/files/tutorial-iOS.mp4
 https://andres9890.github.io/files/tutorial.mp4
 https://andres9890.github.io/files/tutorial2.mp4
 https://andres9890.github.io/files/Twitter_Video_Download.mp4
@@ -57,4 +58,5 @@ https://andres9890.github.io/files/workflow/commit_msg_2026-10-23_12-30-37.txt
 https://andres9890.github.io/files/workflow/commit_msg_2026-10-23_12-37-14.txt
 https://andres9890.github.io/files/workflow/commit_msg_2026-10-23_12-37-54.txt
 https://andres9890.github.io/files/workflow/commit_msg_2026-10-23_12-38-21.txt
+https://andres9890.github.io/files/workflow/commit_msg_2026-10-23_14-10-43.txt
 https://andres9890.github.io/files/worldbox_il2cpp2mono.apk.html
