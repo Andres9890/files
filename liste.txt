@@ -27,7 +27,7 @@ https://andres9890.github.io/files/Screenshot%20%2829%29.png
 https://andres9890.github.io/files/staffguide.pdf
 https://andres9890.github.io/files/tutorial-Android.mp4
 https://andres9890.github.io/files/tutorial-iOS.mp4
-https://andres9890.github.io/files/tutorial2.mp4
+https://andres9890.github.io/files/tutorial2-Android.mp4
 https://andres9890.github.io/files/Twitter_Video_Download.mp4
 https://andres9890.github.io/files/viewer.html
 https://andres9890.github.io/files/WboxMono-old.ipa.html
@@ -62,4 +62,5 @@ https://andres9890.github.io/files/workflow/commit_msg_2026-10-23_12-38-21.txt
 https://andres9890.github.io/files/workflow/commit_msg_2026-10-23_14-10-43.txt
 https://andres9890.github.io/files/workflow/commit_msg_2026-10-23_14-21-13.txt
 https://andres9890.github.io/files/workflow/commit_msg_2026-10-23_14-23-32.txt
+https://andres9890.github.io/files/workflow/commit_msg_2026-10-23_14-24-38.txt
 https://andres9890.github.io/files/worldbox_il2cpp2mono.apk.html

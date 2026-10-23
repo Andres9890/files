@@ -3,7 +3,7 @@ Add downloaded file "tutorial2.mp4"
 Move existing files to root: false
 
 Metadata:
-- File: tutorial2.mp4
+- File: tutorial2-Android.mp4
 - Size: 25.33 MB (26560574 bytes)
 - Type: ISO Media, MP4 Base Media v1 [ISO 14496-12:2003]
 - Modified Time: 2026-10-15 21:32:25.510475669 +0000
@@ -12,4 +12,4 @@ Metadata:
 - SHA1: e14179bbec870b1738406cfbb6ec9327b386a53c
 - SHA256: 001ee9ac828af3f385c3d11461b3bed2a344092cedb384cc2eb509fc1de54a57
 - Source URL: https://tmpfiles.org/dl/1792100211.b9327c10aaac7855/w6AcZbYSpPiT/tutorial2.mp4
-- Current URL: https://andres9890.github.io/files/tutorial2.mp4
+- Current URL: https://andres9890.github.io/files/tutorial2-Android.mp4
