@@ -1,0 +1,282 @@
+name: Hash Compare
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: "Compare with files in this repository or a release"
+        required: true
+        default: repository
+        type: choice
+        options:
+          - repository
+          - release
+      files:
+        description: "Source paths/globs, comma-separated (* = all, including subfolders)"
+        required: true
+        default: "*"
+        type: string
+      release_tag:
+        description: "Release tag, or latest (used only with release source)"
+        required: false
+        default: latest
+        type: string
+      urls:
+        description: "Direct file URL(s), separated by spaces or newlines"
+        required: true
+        type: string
+      algorithm:
+        description: "Hash algorithm"
+        required: true
+        default: sha256
+        type: choice
+        options:
+          - sha256
+          - sha512
+          - sha1
+          - md5
+      fail_on_mismatch:
+        description: "Fail if any linked file has no matching source file"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    name: Compare file hashes
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out repository files
+        if: inputs.source == 'repository'
+        uses: actions/checkout@main
+        with:
+          path: source
+          lfs: true
+          persist-credentials: false
+
+      - name: Download, hash, and compare
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE: ${{ inputs.source }}
+          SOURCE_FILES: ${{ inputs.files }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          REFERENCE_URLS: ${{ inputs.urls }}
+          HASH_ALGORITHM: ${{ inputs.algorithm }}
+          FAIL_ON_MISMATCH: ${{ inputs.fail_on_mismatch }}
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import fnmatch
+          import hashlib
+          import html
+          import json
+          import os
+          import re
+          import subprocess
+          import sys
+          import tempfile
+          from pathlib import Path
+          from urllib.parse import quote, unquote, urlsplit, urlunsplit
+
+          algorithm = os.environ["HASH_ALGORITHM"].lower()
+          source = os.environ["SOURCE"]
+          repository = os.environ["GITHUB_REPOSITORY"]
+          patterns = [p.strip() for p in re.split(r"[,\r\n]+", os.environ["SOURCE_FILES"]) if p.strip()]
+          urls = list(dict.fromkeys(os.environ["REFERENCE_URLS"].split()))
+          output_dir = Path(os.environ["RUNNER_TEMP"]) / "hash-compare-report"
+          output_dir.mkdir(parents=True, exist_ok=True)
+          report = {
+              "repository": repository,
+              "source": source,
+              "algorithm": algorithm,
+              "patterns": patterns,
+              "sources": [],
+              "comparisons": [],
+              "errors": [],
+          }
+
+          def run(args, *, stdout=subprocess.PIPE, timeout=1200):
+              result = subprocess.run(args, stdout=stdout, stderr=subprocess.PIPE, timeout=timeout)
+              if result.returncode:
+                  detail = result.stderr.decode("utf-8", errors="replace").strip()
+                  raise RuntimeError(f"{args[0]} failed (exit {result.returncode}): {detail[:1500]}")
+              return result.stdout
+
+          def api(endpoint):
+              return json.loads(run(["gh", "api", endpoint]))
+
+          def fingerprint(path):
+              digest = hashlib.new(algorithm)
+              size = 0
+              with path.open("rb") as handle:
+                  while chunk := handle.read(4 * 1024 * 1024):
+                      digest.update(chunk)
+                      size += len(chunk)
+              return {"bytes": size, "hash": digest.hexdigest()}
+
+          def selected(candidates):
+              for pattern in patterns:
+                  if not any(fnmatch.fnmatchcase(item["name"], pattern) for item in candidates):
+                      report["errors"].append(f"No source files match pattern: {pattern}")
+              return [item for item in candidates if any(
+                  fnmatch.fnmatchcase(item["name"], pattern) for pattern in patterns
+              )]
+
+          def main():
+              if algorithm not in {"sha256", "sha512", "sha1", "md5"}:
+                  raise ValueError("Unsupported hash algorithm")
+              if not patterns or not urls:
+                  raise ValueError("Provide at least one source pattern and one direct file URL")
+              with tempfile.TemporaryDirectory(prefix="hash-compare-", dir=os.environ["RUNNER_TEMP"]) as temp:
+                  download = Path(temp) / "download.bin"
+                  if source == "repository":
+                      root = Path(os.environ["GITHUB_WORKSPACE"]) / "source"
+                      report["commit"] = run(["git", "-C", str(root), "rev-parse", "HEAD"]).decode().strip()
+                      names = run(["git", "-C", str(root), "ls-files", "-z"]).split(b"\0")
+                      candidates = []
+                      for raw_name in names:
+                          if not raw_name:
+                              continue
+                          name = os.fsdecode(raw_name)
+                          path = root / name
+                          # Submodules and symlinks are not regular repository files.
+                          if path.is_file() and not path.is_symlink() and path.resolve().is_relative_to(root.resolve()):
+                              candidates.append({"name": name, "path": path})
+                  elif source == "release":
+                      tag = os.environ.get("RELEASE_TAG", "").strip() or "latest"
+                      endpoint = "latest" if tag == "latest" else "tags/" + quote(tag, safe="")
+                      release = api(f"repos/{repository}/releases/{endpoint}")
+                      report["release_tag"] = release["tag_name"]
+                      report["release_id"] = release["id"]
+                      candidates = []
+                      page = 1
+                      # Only uploaded assets; GitHub's generated source zip/tar are excluded.
+                      while True:
+                          batch = api(f"repos/{repository}/releases/{release['id']}/assets?per_page=100&page={page}")
+                          candidates.extend({"name": asset["name"], "id": asset["id"]} for asset in batch)
+                          if len(batch) < 100:
+                              break
+                          page += 1
+                  else:
+                      raise ValueError("Source must be repository or release")
+
+                  candidates = sorted(selected(candidates), key=lambda item: item["name"])
+                  if not candidates:
+                      raise ValueError("No source files selected")
+                  for item in candidates:
+                      entry = {"name": item["name"]}
+                      try:
+                          if source == "release":
+                              with download.open("wb") as handle:
+                                  run(["gh", "api", f"repos/{repository}/releases/assets/{item['id']}",
+                                       "-H", "Accept: application/octet-stream"], stdout=handle)
+                              path = download
+                          else:
+                              path = item["path"]
+                          entry.update(fingerprint(path))
+                      except Exception as exc:
+                          entry["error"] = str(exc)
+                          report["errors"].append(f"Source {item['name']}: {exc}")
+                      finally:
+                          download.unlink(missing_ok=True)
+                      report["sources"].append(entry)
+
+                  by_hash = {}
+                  for entry in report["sources"]:
+                      if "hash" in entry:
+                          by_hash.setdefault((entry["bytes"], entry["hash"]), []).append(entry["name"])
+
+                  for index, url in enumerate(urls, 1):
+                      result = {"number": index, "matches": []}
+                      try:
+                          parsed = urlsplit(url)
+                          if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+                              raise ValueError("Use an HTTP or HTTPS direct file URL")
+                          if parsed.username is not None or parsed.password is not None:
+                              raise ValueError("URLs with embedded usernames/passwords are unsupported")
+                          # Omit query strings/fragments from reports (e.g. signed-link tokens).
+                          result["url"] = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
+                          result["name"] = unquote(parsed.path.rsplit("/", 1)[-1]) or f"link-{index}"
+                          # The token is used by gh only; it is never sent to these URLs.
+                          run(["curl", "--disable", "--fail", "--location", "--silent", "--show-error",
+                               "--globoff", "--proto", "=http,https", "--proto-redir", "=http,https",
+                               "--retry", "3", "--retry-delay", "2", "--retry-max-time", "180",
+                               "--connect-timeout", "30", "--max-time", "900",
+                               "--output", str(download), "--url", url])
+                          result.update(fingerprint(download))
+                          result["matches"] = by_hash.get((result["bytes"], result["hash"]), [])
+                          result["status"] = "MATCH" if result["matches"] else "NO MATCH"
+                      except Exception as exc:
+                          result.update(status="ERROR", error=str(exc))
+                          report["errors"].append(f"Link {index}: {exc}")
+                      finally:
+                          download.unlink(missing_ok=True)
+                      report["comparisons"].append(result)
+
+          try:
+              main()
+          except Exception as exc:
+              report["errors"].append(str(exc))
+
+          matched = sum(item["status"] == "MATCH" for item in report["comparisons"])
+          report["result"] = "ERROR" if report["errors"] else ("MATCH" if matched == len(urls) else "NO MATCH")
+          report["matched_links"] = matched
+          report["total_links"] = len(urls)
+          (output_dir / "hash-compare.json").write_text(json.dumps(report, indent=2, ensure_ascii=True) + "\n")
+
+          def cell(value, limit=300):
+              text = str(value).replace("\n", " ").replace("\r", " ")
+              if len(text) > limit:
+                  text = text[:limit] + "..."
+              return "<code>" + html.escape(text).replace("|", "&#124;") + "</code>"
+
+          lines = [
+              "# Hash comparison", "",
+              f"**Result: {report['result']}** - {matched}/{len(urls)} linked files matched.", "",
+              f"Source: {cell(repository)} / {cell(source)}. Algorithm: {cell(algorithm.upper())}.", "",
+              "Each link is compared with every selected source file by byte size and hash. "
+              "Names may differ. Extra source files do not count as mismatches. "
+              "Archives are compared as downloaded, without unpacking.", "",
+          ]
+          for key in ("commit", "release_tag"):
+              if key in report:
+                  lines.extend([f"{key.replace('_', ' ').title()}: {cell(report[key])}", ""])
+          lines.extend(["## Linked files", "", "| File | Bytes | Hash | Result | Matching source files |",
+                        "| --- | ---: | --- | --- | --- |"])
+          for item in report["comparisons"][:100]:
+              names = "<br>".join(cell(name) for name in item["matches"][:10]) or "-"
+              if len(item["matches"]) > 10:
+                  names += f"<br>and {len(item['matches']) - 10} more"
+              lines.append(f"| {cell(item.get('name', 'link-' + str(item['number'])))} | "
+                           f"{item.get('bytes', '-')} | {cell(item.get('hash', '-'))} | {item['status']} | {names} |")
+          lines.extend(["", "## Source hashes", "", "| Source file | Bytes | Hash |",
+                        "| --- | ---: | --- |"])
+          for item in report["sources"][:100]:
+              lines.append(f"| {cell(item['name'])} | {item.get('bytes', '-')} | "
+                           f"{cell(item.get('hash', 'ERROR'))} |")
+          if report["errors"]:
+              lines.extend(["", "## Errors", ""])
+              lines.extend("- " + cell(error, limit=1000) for error in report["errors"][:50])
+          lines.extend(["", "Tables show up to 100 linked/source files and 10 matches per link. "
+                        "The hash-compare-report artifact contains the complete JSON report.", ""])
+          summary = "\n".join(lines)
+          (output_dir / "hash-compare.md").write_text(summary, encoding="utf-8", errors="replace")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8", errors="replace") as handle:
+              handle.write(summary)
+          print(summary)
+          fail = os.environ.get("FAIL_ON_MISMATCH", "true").lower() == "true"
+          sys.exit(1 if report["errors"] or (fail and matched != len(urls)) else 0)
+          PY
+
+      - name: Upload comparison report
+        if: always()
+        uses: actions/upload-artifact@main
+        with:
+          name: hash-compare-report
+          path: ${{ runner.temp }}/hash-compare-report/
+          if-no-files-found: ignore
+          retention-days: 30
