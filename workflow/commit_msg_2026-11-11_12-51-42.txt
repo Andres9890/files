@@ -1,0 +1,13 @@
+Rename file "Managed.zip" to "Managed-old.zip"
+
+Metadata:
+- Previous File: Managed.zip
+- File: Managed-old.zip
+- Size: 15.89 MB (16665763 bytes)
+- Type: Zip archive data, at least v2.0 to extract, compression method=deflate
+- Modified Time: 2026-11-11 12:51:41.235639+00:00
+- CRC32: 73227f24
+- MD5: 80018b99326e10af66a604469994775a
+- SHA1: d20ea85d091b1e9948d4e556df01b77acdb97af0
+- SHA256: 66f505a1ddea20a706b7893dc3e50533386153063173a7b91d9d672449697536
+- Current URL: https://andres9890.github.io/files/Managed-old.zip
