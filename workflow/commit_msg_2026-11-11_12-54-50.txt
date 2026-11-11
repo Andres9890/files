@@ -1,0 +1,15 @@
+Add downloaded file "Managed.zip"
+
+Move existing files to root: true
+
+Metadata:
+- File: Managed.zip
+- Size: 15.78 MB (16548160 bytes)
+- Type: Zip archive data, at least v2.0 to extract, compression method=deflate
+- Modified Time: 2026-11-11 12:54:50.662327202 +0000
+- CRC32: 3b20c961
+- MD5: 2baaca7aae65bf59f699faa25a0ecff1
+- SHA1: dace533cdea2ebbfa4b88bca91c16c0d6234a3fd
+- SHA256: 6462ee7cb9fedf5fa13a742956bfe18f5edf4a264a4a7fe359a8bf452c544247
+- Source URL: https://cdn.discordapp.com/attachments/1560671300110913536/1568164121579360327/Managed.zip?ex=6af569a5&is=6af41825&hm=6bd9a401bd6914ace846b777c5e554c29d76f66f2fc3118837702a1d7ca2bdf0&
+- Current URL: https://andres9890.github.io/files/Managed.zip
