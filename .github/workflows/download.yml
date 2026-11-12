@@ -74,7 +74,7 @@ jobs:
           from urllib.parse import quote, quote_from_bytes
           from urllib.request import Request, urlopen
 
-          BASE_URL = "https://andres9890.github.io/files/"
+          BASE_URL = "https://files.andres99.qzz.io/"
           UNITS = ("B", "KB", "MB", "GB", "TB", "PB", "EB")
           NO_DOWNLOAD = "N/A (no download requested)"
 
