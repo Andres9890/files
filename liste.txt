@@ -5,6 +5,7 @@ https://files.andres99.qzz.io/141.Subway.Surfers.2014.2.1.1.836116588.ipa.html
 https://files.andres99.qzz.io/404.html
 https://files.andres99.qzz.io/_.png.html
 https://files.andres99.qzz.io/Car_Parking_1.2_ios_7.0.ipa.html
+https://files.andres99.qzz.io/CNAME
 https://files.andres99.qzz.io/com.mgc.stickman.rope.hero_829771647.ipa.html
 https://files.andres99.qzz.io/flight-sumting.gif
 https://files.andres99.qzz.io/fusionApp-debug.apk.html
@@ -81,6 +82,7 @@ https://files.andres99.qzz.io/workflow/commit_msg_2026-11-12_17-49-37.txt
 https://files.andres99.qzz.io/workflow/commit_msg_2026-11-12_20-47-51.txt
 https://files.andres99.qzz.io/workflow/commit_msg_2026-11-15_12-37-44.txt
 https://files.andres99.qzz.io/workflow/commit_msg_2026-11-19_21-29-03.txt
+https://files.andres99.qzz.io/workflow/commit_msg_2026-11-19_21-30-55.txt
 https://files.andres99.qzz.io/worldbox_il2cpp2mono-old.apk.html
 https://files.andres99.qzz.io/worldbox_il2cpp2mono.apk.html
 https://files.andres99.qzz.io/Xboxbuild.torrent
