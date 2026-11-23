@@ -1,0 +1,15 @@
+Add downloaded file "early_xmas.zip"
+
+Move existing files to root: false
+
+Metadata:
+- File: early_xmas.zip
+- Size: 2.75 KB (2820 bytes)
+- Type: HTML document, ASCII text, with very long lines (768)
+- Modified Time: 2026-11-23 20:41:37.946525822 +0000
+- CRC32: bc29e63d
+- MD5: 642ef695a45463f6a562f550b3ea72bb
+- SHA1: 4639fcc3de72845f00f30b2d2761b7d54a98a92e
+- SHA256: 408bb5777a48a463de53d11d24d912d83f92d4acdeaf9235e8ce09fb1d284107
+- Source URL: https://tmpfiles.org/dl/1795450095.9d803a2ac112b0b6/wMADjv1KTNbG/early_xmas.zip
+- Current URL: https://download.files.int.yt/early_xmas.zip
