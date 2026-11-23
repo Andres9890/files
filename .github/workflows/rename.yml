@@ -47,7 +47,7 @@ jobs:
           from decimal import Decimal, localcontext
           from urllib.parse import quote, quote_from_bytes
 
-          BASE_URL = "https://andres9890.github.io/files/"
+          BASE_URL = "https://download.files.int.yt/"
           UNITS = ("B", "KB", "MB", "GB", "TB", "PB", "EB")
           GIT_ENV = dict(os.environ, GIT_LITERAL_PATHSPECS="1")
 
