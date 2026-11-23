@@ -30,6 +30,7 @@ https://download.files.int.yt/NeoModLoader-old.dll
 https://download.files.int.yt/NeoModLoader.dll
 https://download.files.int.yt/Payback.ipa.html
 https://download.files.int.yt/README.md
+https://download.files.int.yt/README.txt
 https://download.files.int.yt/sce.png
 https://download.files.int.yt/sce2.png
 https://download.files.int.yt/Screenshot%20%2829%29.png
@@ -88,6 +89,7 @@ https://download.files.int.yt/workflow/commit_msg_2026-11-19_21-30-55.txt
 https://download.files.int.yt/workflow/commit_msg_2026-11-23_14-02-49.txt
 https://download.files.int.yt/workflow/commit_msg_2026-11-23_14-06-26.txt
 https://download.files.int.yt/workflow/commit_msg_2026-11-23_14-48-08.txt
+https://download.files.int.yt/workflow/commit_msg_2026-11-23_15-05-35.txt
 https://download.files.int.yt/worldbox_il2cpp2mono-old.apk.html
 https://download.files.int.yt/worldbox_il2cpp2mono.apk.html
 https://download.files.int.yt/Xboxbuild.torrent
