@@ -10,4 +10,4 @@ Metadata:
 - MD5: 48513f4cd56baa4192ce8988822a4e7f
 - SHA1: 5f9576e0c8bff5341f95d8e26c0f3f147278fb24
 - SHA256: 0b6891295ba3ff3321d75587b2a1c9b0083f6b54f1c42b74e2c26340a6729b1c
-- Current URL: https://andres9890.github.io/files/tutorial-Android.mp4
+- Current URL: https://download.files.int.yt/tutorial-Android.mp4

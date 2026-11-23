@@ -12,4 +12,4 @@ Metadata:
 - SHA1: e14179bbec870b1738406cfbb6ec9327b386a53c
 - SHA256: 001ee9ac828af3f385c3d11461b3bed2a344092cedb384cc2eb509fc1de54a57
 - Source URL: https://tmpfiles.org/dl/1792100211.b9327c10aaac7855/w6AcZbYSpPiT/tutorial2.mp4
-- Current URL: https://andres9890.github.io/files/tutorial2-Android.mp4
+- Current URL: https://download.files.int.yt/tutorial2-Android.mp4

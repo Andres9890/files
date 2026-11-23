@@ -9,4 +9,4 @@ Metadata:
 - SHA1: 28b44c38cb8c1fa4f9d73610c133123cebb1cbb2
 - SHA256: 4950ccc883823c4cb7adf7a92221f5475c1cc37b34f844184790fa0302a93feb
 - Source URL: https://tuxxego.com/staffguide.pdf
-- Current URL: https://andres9890.github.io/files/staffguide.pdf
+- Current URL: https://download.files.int.yt/staffguide.pdf

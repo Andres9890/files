@@ -12,4 +12,4 @@ Metadata:
 - SHA1: dace533cdea2ebbfa4b88bca91c16c0d6234a3fd
 - SHA256: 6462ee7cb9fedf5fa13a742956bfe18f5edf4a264a4a7fe359a8bf452c544247
 - Source URL: https://cdn.discordapp.com/attachments/1560671300110913536/1568164121579360327/Managed.zip?ex=6af569a5&is=6af41825&hm=6bd9a401bd6914ace846b777c5e554c29d76f66f2fc3118837702a1d7ca2bdf0&
-- Current URL: https://andres9890.github.io/files/Managed.zip
+- Current URL: https://download.files.int.yt/Managed.zip
