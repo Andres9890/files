@@ -1,0 +1,13 @@
+Rename file "early_xmas.zip" to "early_xmas-password-is-thankyoucyberleek.zip"
+
+Metadata:
+- Previous File: early_xmas.zip
+- File: early_xmas-password-is-thankyoucyberleek.zip
+- Size: 54.5 MB (57145661 bytes)
+- Type: Zip archive data, at least v2.0 to extract, compression method=deflate
+- Modified Time: 2026-11-23 16:06:25.948413+00:00
+- CRC32: af68ecd6
+- MD5: fede6f04b049c43d40e0b7bfe18ad03c
+- SHA1: 800f94050a2ebb93e39f315a1d3ab77290b72ab1
+- SHA256: 7545a2f7fb4b399cf8850987f087ed9a4d8499ddb6d6c2d642fd60c27f569730
+- Current URL: https://andres9890.github.io/files/early_xmas-password-is-thankyoucyberleek.zip
