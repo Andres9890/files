@@ -1,0 +1,13 @@
+Rename file "early_xmas(1).zip" to "early_xmas.zip"
+
+Metadata:
+- Previous File: early_xmas(1).zip
+- File: early_xmas.zip
+- Size: 2.75 KB (2820 bytes)
+- Type: HTML document, ASCII text, with very long lines (768)
+- Modified Time: 2026-11-23 16:07:28.531733+00:00
+- CRC32: b29c9877
+- MD5: e9a2121c2a91a69da873a26d96133053
+- SHA1: 6a6bde1cda8e176e5fbc7a32a9af430424f3d528
+- SHA256: b1099fe4e9c29d2e66d19c4b34da5ddf526f6958d64fdfdda5972944fbbcd87c
+- Current URL: https://andres9890.github.io/files/early_xmas.zip
