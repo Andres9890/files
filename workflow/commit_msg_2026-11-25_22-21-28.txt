@@ -1,0 +1,15 @@
+Add downloaded file "PS5build.torrent"
+
+Move existing files to root: false
+
+Metadata:
+- File: PS5build.torrent
+- Size: 1.22 MB (1277354 bytes)
+- Type: BitTorrent file
+- Modified Time: 2026-11-25 22:21:29.099157186 +0000
+- CRC32: f09b8896
+- MD5: 4064ca0a1f52a81c251b12985571ac4c
+- SHA1: 776edc418807b3af73a7f1e291a84a0a14c68176
+- SHA256: 3e2761354ee9c8f2c45b4981379a784c819534bd8aaf533b7ec37106eaa652c1
+- Source URL: https://github.com/Andres9890/test/raw/refs/heads/main/PS5build.torrent
+- Current URL: https://download.files.int.yt/PS5build.torrent
